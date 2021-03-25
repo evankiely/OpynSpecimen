@@ -6,6 +6,10 @@ This package is designed to help overcome various points of friction discovered 
 
 ## Getting Started
 
+### Requirements
+- An OpenSpecimen account with Super Admin privilege
+- A Python environment with the NumPy, pandas, Requests, and jsonpickle libraries installed
+
 ## Documentation
 
 ### Core Classes
