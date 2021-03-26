@@ -5,7 +5,7 @@ An object oriented wrapper and tooling for the OpenSpecimen API, written in Pyth
 This package is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
 ### Use Cases
-- The original problem this project set out to solve is how to transition customized objects across the various OpenSpecimen instances we run
+- The original problem this project set out to solve is how to transition customized objects across OpenSpecimen instances
   - Like many cases where there is a distinct Production environment, we begin modifying and optimizing our approach to problems and features in our Test and Dev environments
   - As we converge on a standard set of approaches to things in those environments, we start thinking about transitioning them into Production
   - However, when we first attempted to do this via the provided JSON import/export functionality, it became apparent rather quickly that there is no inbuilt way for OpenSpecimen to account for the divergence in reference codes used to point to a particular field of a given form across environments
@@ -30,7 +30,7 @@ This package is designed to help overcome various points of friction discovered 
 
 ### Requirements
 - An OpenSpecimen account with Super Admin privilege
-- A Python environment with the NumPy, pandas, Requests, and jsonpickle libraries installed
+- A Python environment with the NumPy, pandas, Requests, tqdm, and jsonpickle libraries installed
 
 ### Set-Up
 - These functions require access to OpenSpecimen to work properly, and will need to reference the **Username**, **Password**, and **Domain** of the chosen account
@@ -56,7 +56,10 @@ This package is designed to help overcome various points of friction discovered 
 - Upload Classes
 
 ### Core Functionality
-- The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance of OpenSpecimen, live. It forms the basis for the other classes, which inherit their knowledge of the API, etc., from it. The intent here is to remove the need for non-technical folks to change things in the core functions of the Translator and Integrations objects. This approach does not always lead to the cleanest, most efficient code, but is often better for use in a business environment.
+- The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance(s) of OpenSpecimen, live. It forms the basis for the other classes, which inherit their knowledge of the API, etc., from it. The intent here is to remove the need for non-technical folks to change things in the core functions of the Translator and Integrations objects. This approach does not always lead to code that is the cleanest, most efficient, or easiest to read, but is often better for use in a business environment
+- The **Translator** class enables easy, human in the loop transitioning of Collection Protocol Workflows between environments, and a generic Diff Report function to compare Workflows
+- The **Integrations** class provides a robust suite of functions to interface with the OpenSpecimen API, including pulling down internal IDs of Collection Protocols, Forms, Fields, etc., along with upload capabilities for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document upload. It is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
+- The **Upload Classes** are a set of Python objects that are used to organize and store information before being serialized to JSON and passed to the API
 
 ### Class Methods and Attributes
 
