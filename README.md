@@ -50,10 +50,10 @@ This package is designed to help overcome various points of friction discovered 
 ## Documentation
 
 ### Core Classes
-- Settings
-- Translator
-- Integrations
-- Upload Classes
+- **Settings**
+- **Translator**
+- **Integrations**
+- **Upload Classes**
 
 ### Core Functionality
 - The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance(s) of OpenSpecimen, live. It forms the basis for the other classes, which inherit their knowledge of the API, etc., from it. The intent here is to remove the need for non-technical folks to change things in the core functions of the Translator and Integrations objects. This approach does not always lead to code that is the cleanest, most efficient, or easiest to read, but is often better for use in a business environment
