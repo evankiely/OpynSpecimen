@@ -4,6 +4,28 @@ An object oriented wrapper and tooling for the OpenSpecimen API, written in Pyth
 ## Introduction
 This package is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
+### Use Cases
+- The original problem this project set out to solve is how to transition customized objects across the various OpenSpecimen instances we run
+  - Like many cases where there is a distinct Production environment, we begin modifying and optimizing our approach to problems and features in our Test and Dev environments
+  - As we converge on a standard set of approaches to things in those environments, we start thinking about transitioning them into Production
+  - However, when we first attempted to do this via the provided JSON import/export functionality, it became apparent rather quickly that there is no inbuilt way for OpenSpecimen to account for the divergence in reference codes used to point to a particular field of a given form across environments
+    - For instance, if you create a form in OpenSpecimen, and that form has a dropdown menu, the first dropdown menu in that environment, OpenSpecimen will use `DD1` to refer to it (DD for dropdown, 1 because it's the first)
+    - If you later decide that it would actually be a better idea for that field to be in a different form, the dropdown added to that form will have the code `DD2`
+    - Once you are ready to transition a Collection Protocol Workflow from one environment to another, if that Workflow references a field via `DD2`, but that field is actually `DD1` in the other environment, that part of the Workflow will break
+  - We approached this problem by using the OpenSpecimen API to pulldown all Collection Protocol Workflows from across our various environments, along with relevant form and field data
+  - We then created a function to read in a .csv which specifies the Collection Protocol(s) of interest, their starting environment, and the environment you would like for them to be modified for
+  - The function then opens the Workflow file, parses it to identify places where there are codes that might need to be changed, and appends the codes it thinks should replace what is there
+  - Finally, it produces a folder which contains a copy of the original Workflow, the modified Workflow, a list of forms that will need to be attached in the new environment, and a Diff file, which highlights the suggested changes so that a human can make the final determination by referencing against the field data pulled via the API
+
+- Shortly after beginning to work on the above, we realized that the bulk data upload capabilities of OpenSpecimen are quite fragile. This is a big problem for us for a few reasons
+  - We are transitioning to OpenSpecimen from a number of different legacy systems, so we will need to use it quite a lot
+  - Uploads are not enacted if a single record fails, unless the number of records in the upload is larger than a size specified in settings
+  - Failed uploads often provide a single reason for failure, so a record may fail for one reason, which is then addressed, then fail for some other reason on the next attempt
+  - The templates used for specimen uploads encourage/require significant redundant data entry
+  - Even fairly small datasets take a while to load
+  - Large datasets may cause server issues, since the data is held in memory while being validated
+  - So we built a more robust suite of upload functions to address these concerns
+
 ## Getting Started
 
 ### Requirements
