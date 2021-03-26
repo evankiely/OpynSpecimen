@@ -21,7 +21,7 @@ This package is designed to help overcome various points of friction discovered 
   - If you have more than three instances of OpenSpecimen, you can always copy/paste what is already there to add more. However, be mindful to replace the key for the copy/pasted values, as dictionaries may only have a single instance of a given key, and because this key is used later to properly format the URL that gets used to interface with the API
 - Next you should update the `self.baseURL` attribute of the Settings class to reflect the general URL of the OpenSpecimen instances you use
   - As with the environmental variables, these functions have an assumption regarding the formatting of your URL
-    - They expect that you include some keyword to distinguish the instances, and that the keyword will be represented by an underscore (as in openspecimen**_**.openspecimen.com)
+    - They expect that you include some keyword to distinguish the instances, and that the keyword will be represented by an underscore (as in openspecimen_.openspecimen.com)
     - They expect that the production environment has no URL keyword (as in openspecimen.openspecimen.com)
     - These, aside from prod, are filled from the key for the environmental variables in the Settings class (as in openspecimen**test**.openspecimen.com and openspecimen**dev**.openspecimen.com)
 
