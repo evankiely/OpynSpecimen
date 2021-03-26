@@ -52,16 +52,75 @@ This package is designed to help overcome various points of friction discovered 
 ### Core Classes
 - **Settings**
 - **Translator**
-- **Integrations**
+- **Integration**
 - **Upload Classes**
 
 ### Core Functionality
-- The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance(s) of OpenSpecimen, live. It forms the basis for the other classes, which inherit their knowledge of the API, etc., from it. The intent here is to remove the need for non-technical folks to change things in the core functions of the Translator and Integrations objects. This approach does not always lead to code that is the cleanest, most efficient, or easiest to read, but is often better for use in a business environment
+- The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance(s) of OpenSpecimen, live. It forms the basis for the other classes, which inherit their knowledge of the API, etc., from it. The intent here is to remove the need for non-technical folks to change things in the core functions of the Translator and Integration objects. This approach does not always lead to code that is the cleanest, most efficient, or easiest to read, but is often better for use in a business environment
 - The **Translator** class enables easy, human in the loop transitioning of Collection Protocol Workflows between environments, and a generic Diff Report function to compare Workflows
-- The **Integrations** class provides a robust suite of functions to interface with the OpenSpecimen API, including pulling down internal IDs of Collection Protocols, Forms, Fields, etc., along with upload capabilities for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document upload. It is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
+- The **Integration** class provides a robust suite of functions to interface with the OpenSpecimen API, including pulling down internal IDs of Collection Protocols, Forms, Fields, etc., along with upload capabilities for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document upload. It is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
 - The **Upload Classes** are a set of Python objects that are used to organize and store information before being serialized to JSON and passed to the API
 
 ### Class Methods and Attributes
+
+#### Settings
+- This class should remain mostly static, since it consists primarily of details of the OpenSpecimen API. There are, however, a few things that you will need/want to customize that warrant mentioning
+- Settings.baseURL
+- Settings.envs
+- Settings.formOutPath
+- Settings.fieldOutPath
+- Settings.cpOutPath
+- Settings.dropdownOutpath
+- Settings.translatorInputDir
+- Settings.translatorOutputDir
+- Settings.uploadInputDir
+
+#### Translator
+- Translator.loadDF(path)
+- Translator.getDiffReport(filePaths=None, fileNames=None, directComp=False, openOnFinish=False)
+- Translator.getFormName(blockName)
+- Translator.translate(openDiff=False)
+
+#### Integration
+- Integration.renewTokens()
+- Integration.getTokens()
+- Integration.syncAll(envs=None)
+- Integration.getResponse(env, extension, params=None)
+- Integration.postResponse(env, extension, data, method="POST", matchPPID=False)
+- Integration.postFile(env, extension, files)
+- Integration.genericBulkUpload(importType="CREATE", checkStatus=False)
+- Integration.cleanDateForBulk(date)
+- Integration.cleanDateForAPI(date)
+- Integration.cleanVal(val)
+- Integration.matchParticipants(env, pmis=None, empi=None)
+- Integration.makeParticipants(env, matchPPID=False)
+- Integration.uploadParticipants(matchPPID=False)
+- Integration.universalUpload()
+- Integration.matchVisit(env, visitName)
+- Integration.makeVisits(env, universal=False)
+- Integration.uploadVisits()
+- Integration.recursiveSpecimens(env, parentSpecimen=None)
+- Integration.uploadSpecimens()
+- Integration.makeSpecimen(env, data, referenceSpec={})
+- Integration.makeAliquot(env, data, referenceSpec={})
+- Integration.buildExtensionDetail(env, formExten, data)
+- Integration.validateInputFiles(keyword)
+- Integration.setCPDF(envs=None)
+- Integration.syncWorkflowList(envs=None, wantDF=False)
+- Integration.syncWorkflows(envs=None)
+- Integration.setFormDF(envs=None)
+- Integration.syncFormList(envs=None, wantDF=False)
+- Integration.setFieldDF(envs=None)
+- Integration.syncFieldList(envs=None, wantDF=False)
+- Integration.setDropdownDF(envs=None)
+- Integration.syncDropdownList(envs=None, wantDF=False)
+- Integration.syncDropdownPVs(envs=None)
+- Integration.updateAll(envs=None)
+- Integration.updateWorkflows(envs=None)
+- Integration.updateForms(envs=None)
+
+#### Upload Classes
+- See the entry under Core Functionality for more information. These objects largely store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
 
 ## License
 This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/evankiely/OpynSpecimen/blob/main/LICENSE). For more permissive licensing in the case of commercial usage, please contact the [Office of Technology Transfer](http://www.ott.emory.edu/) at Emory University, and reference Emory TechID 21074
