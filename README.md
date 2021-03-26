@@ -17,14 +17,13 @@ This package is designed to help overcome various points of friction discovered 
   - For more information on how to do this with [**macOS** and **Linux** see here](https://www.youtube.com/watch?v=5iWhQWVXosU)
 - Note the variables you associated with these credentials and alter the Settings class's `self.envs` attribute to reflect them
   - You should ideally avoid reusing credentials across your OpenSpecimen instances, which means the environmental variables themselves will need to be named differently in order to distinguish them from one another
-  - The Settings class accounts for this by providing three examples that you can modify -- currently set as Test, Dev, and Prod. To alter these, just replace the text in quotes within the `self.getEnVar` function call to reflect the variable names you created previously
-  - If you have more than three instances, you can always copy/paste what is already there to add more. However, be mindful to replace the key for the copy/pasted values, as dictionaries may only have a single instance of a given key, and because this key is used later to properly format the URL that gets used to interface with the API
+  - The Settings class accounts for this by providing three examples that you can modify -- currently set as **test**, **dev**, and **prod**. To alter these, just replace the text in quotes within the `self.getEnVar` function call to reflect the variable names you created previously
+  - If you have more than three instances of OpenSpecimen, you can always copy/paste what is already there to add more. However, be mindful to replace the key for the copy/pasted values, as dictionaries may only have a single instance of a given key, and because this key is used later to properly format the URL that gets used to interface with the API
 - Next you should update the `self.baseURL` attribute of the Settings class to reflect the general URL of the OpenSpecimen instances you use
   - As with the environmental variables, these functions have an assumption regarding the formatting of your URL
-    - They expect that you include some keyword to distinguish the instances, and that the keyword will be represented by an underscore (as in openspecimen_.openspecimen.com)
-    - They expect that the production environment has no keyword to distinguish it
-    - For example: production would be openspecimen.openspecimen.com, test would be openspecimentest.openspecimen.com, and development would be openspecimendev.openspecimen.com
-    - These, aside from prod, are filled from the key for the environmental variables in the Settings class
+    - They expect that you include some keyword to distinguish the instances, and that the keyword will be represented by an underscore (as in openspecimen**_**.openspecimen.com)
+    - They expect that the production environment has no URL keyword (as in openspecimen.openspecimen.com)
+    - These, aside from prod, are filled from the key for the environmental variables in the Settings class (as in openspecimen**test**.openspecimen.com and openspecimen**dev**.openspecimen.com)
 
 ## Documentation
 
