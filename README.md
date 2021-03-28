@@ -5,7 +5,7 @@ An object oriented wrapper and tooling for the OpenSpecimen API, written in Pyth
 This package is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
 ### Use Cases
-- The original problem this project set out to solve is how to transition customized objects across OpenSpecimen instances
+- The original problem this project set out to solve is how to transition customized objects across OpenSpecimen instances, and maintain version control
   - Like many cases where there is a distinct Production environment, we begin modifying and optimizing our approach to problems and features in our Test and Dev environments
   - As we converge on a standard set of approaches to things in those environments, we start thinking about transitioning them into Production
   - However, when we first attempted to do this via the provided JSON import/export functionality, it became apparent rather quickly that there is no inbuilt way for OpenSpecimen to account for the divergence in reference codes used to point to a particular field of a given form across environments
