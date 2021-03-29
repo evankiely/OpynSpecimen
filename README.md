@@ -117,12 +117,12 @@ This package is designed to help overcome various points of friction discovered 
   - **extension**: The extension to be appended to the default URL
   - **params**: A dictionary of any parameters the GET request may allow/require
 - `Integration.postResponse(env, extension, data, method="POST", matchPPID=False)`
-  - A generic request, able to accept various methods, but designed for "PUT" and "POST"
+  - A generic request, able to accept various methods, but designed for `"PUT"` and `"POST"`
   - **env**: The environment this request is targeted at
   - **extension**: The extension to be appended to the default URL
   - **data**: A dictionary of any data the request may allow/require
-  - **method**: The type of request; currently tested with "PUT" and "POST"
-  - **matchPPID**: Used when uploading participants; if True, will match existing participants in a collection protocol to those being uploaded based on PPID and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **method**: The type of request; currently tested with `"PUT"` and `"POST"`
+  - **matchPPID**: Used when uploading participants; if `True`, will match existing participants in a collection protocol to those being uploaded based on PPID and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.postFile(env, extension, files)`
   - A generic function used to upload files via the OpenSpecimen API
   - **env**: The environment this upload is targeted at
@@ -130,7 +130,7 @@ This package is designed to help overcome various points of friction discovered 
   - **files**: The file or files to be uploaded
 - `Integration.genericBulkUpload(importType="CREATE", checkStatus=False)`
   - A generic function used to upload files via the API rather than the GUI. Behaves exactly the same as if you were doing a bulk upload of data via the OpenSpecimen templates and GUI
-  - **importType**: Whether the data is intended to "CREATE" new records, or "UPDATE" old ones
+  - **importType**: Whether the data is intended to `"CREATE"` new records, or `"UPDATE"` old ones
   - **checkStatus**: Whether or not to check in on the status of an upload every few seconds and print that information to the console
 - `Integration.cleanDateForBulk(date)`
   - A generic function that cleans and formats dates to something the OpenSpecimen bulk upload function will accept
@@ -149,10 +149,10 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.makeParticipants(env, matchPPID=False)`
   - Creates the Participant object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
-  - **matchPPID**: If True, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: If `True`, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
-  - **matchPPID**: If True, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: If `True`, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.universalUpload()`
   - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
 - `Integration.matchVisit(env, visitName)`
