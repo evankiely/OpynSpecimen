@@ -156,51 +156,51 @@ This package is designed to help overcome various points of friction discovered 
 - Integration.universalUpload()
   - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
 - Integration.matchVisit(env, visitName)
-  - 
+  - Matches visits against those that already exist in a given environment, based on that visit's name
   - **env**: The environment this function is targeted at
-  - **visitName**: 
+  - **visitName**: The name of the visit to be matched. Will match only exact, but will match the first instance of that name, so must be unique within an given collection protocol
 - Integration.makeVisits(env, universal=False)
-  - 
+  - Creates the Visit object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
-  - **universal**: 
+  - **universal**: Set `True` to indicate this visit is part of a "Universal" upload
 - Integration.uploadVisits()
-  - 
+  - The function that is called to begin the visit upload process. Looks for a document named in the following format: "visits_[envCode]_miscOtherInfo.csv"
 - Integration.recursiveSpecimens(env, parentSpecimen=None)
-  - 
+  - A depth-first approach to specimen creation
   - **env**: The environment this function is targeted at
-  - **parentSpecimen**: 
+  - **parentSpecimen**: Parent specimen information to allow for the child specimen to easily match where to be uploaded and, eventually, fill missing information from the parent as needed
 - Integration.uploadSpecimens()
-  - 
+  - The function that is called to begin the specimen upload process. Looks for a document named in the following format: "specimens_[envCode]_miscOtherInfo.csv"
 - Integration.makeSpecimen(env, data, referenceSpec={})
-  - 
+  - Creates the Specimen object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
-  - **data**: 
-  - **referenceSpec**: 
+  - **data**: The data used to create the Specimen object
+  - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
 - Integration.makeAliquot(env, data, referenceSpec={})
-  - 
+  - Creates the Aliquot object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
-  - **data**: 
-  - **referenceSpec**: 
+  - **data**: The data used to create the Aliquot object
+  - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
 - Integration.buildExtensionDetail(env, formExten, data)
-  - 
+  - Creates the Extension object, populates it with data, and passes it to be uploaded. Extension Details are things like Participant/Visit/Specimen Additional Fields, and Event Fields
   - **env**: The environment this function is targeted at
-  - **formExten**: 
-  - **data**: 
+  - **formExten**: A dictionary structured like `{"formId": formId, "formName": formName}`
+  - **data**: The data used to create the Extension object
 - Integration.validateInputFiles(keyword)
-  - 
-  - **keyword**: 
+  - Pulls file paths for all the files in the Input folder which contain a given keyword
+  - **keyword**: The search term
 - Integration.setCPDF(envs=None)
-  - 
+  - Sets the Collection Protocol Dataframe if the .csv exists, or builds a new copy by calling syncWorkflowList. Since it sets `wantDF=True` when calling syncWorkflowList the .csv copy of the Collection Protocol Dataframe is not updated when this is invoked
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncWorkflowList(envs=None, wantDF=False)
-  - 
+  - Creates a new dataframe of Collection Protocols which are available in the provided environment(s)
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
-  - **wantDF**: 
+  - **wantDF**: Indicates if the user wants the function to return the new dataframe. If so, the dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
 - Integration.syncWorkflows(envs=None)
-  - 
+  - Pulls down copies of the Workflows for all Collection Protocols in the Collection Protocol dataframe, as long as those Workflows are not empty
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.setFormDF(envs=None)
-  - 
+  - Sets the Form Dataframe if the .csv exists, or builds a new copy by calling syncFormList. Since it sets `wantDF=True` when calling syncFormList the .csv copy of the Form Dataframe is not updated when this is invoked
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncFormList(envs=None, wantDF=False)
   - 
