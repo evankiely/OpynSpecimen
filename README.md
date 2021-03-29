@@ -92,8 +92,8 @@ This package is designed to help overcome various points of friction discovered 
   - **path**: The path to the file that is to be read in
 - `Translator.getDiffReport(filePaths=None, fileNames=None, directComp=False, openOnFinish=False)`
   - A generic function that compares two JSON files and creates a folder containing the two compared documents and the diff file itself
-  - **filePaths**: 
-  - **fileNames**: 
+  - **filePaths**: A dictionary structured like `{"original": pathToOriginal, "comparison": pathToComparison}`
+  - **fileNames**: A dictionary structured like `{"original": {"file": fileName, "env": envCode}, "comparison": {"file": fileName, "env": envCode}}`
   - **directComp**: Set `True` if the documents being compared are just from different environments and not translated vs. original
   - **openOnFinish**: Set `True` to open the diff file when the function is done running
 - `Translator.getFormName(blockName)`
