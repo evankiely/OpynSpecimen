@@ -140,7 +140,7 @@ This package is designed to help overcome various points of friction discovered 
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with pd.apply(cleanDateForAPI)
 - Integration.cleanVal(val)
   - 
-  - 
+  - **val**: 
 - Integration.matchParticipants(env, pmis=None, empi=None)
   - 
   - 
