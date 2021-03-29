@@ -15,7 +15,7 @@ This package is designed to help overcome various points of friction discovered 
   - We approached this problem by using the OpenSpecimen API to pulldown all Collection Protocol Workflows from across our various environments, along with relevant form and field data
   - We then created a function to read in a .csv which specifies the Collection Protocol(s) of interest, their starting environment, and the environment you would like for them to be modified for
   - The function then opens the Workflow file, parses it to identify places where there are codes that might need to be changed, and appends the codes it thinks should replace what is there
-  - Finally, it produces a folder which contains a copy of the original Workflow, the modified Workflow, a list of forms that will need to be attached in the new environment, and a Diff file, which highlights the suggested changes so that a human can make the final determination by referencing against the field data pulled via the API
+  - Finally, it produces a folder which contains a copy of the original Workflow, the modified Workflow, a list of forms that will need to be attached in the new environment, and a Diff Report file, which highlights the suggested changes so that a human can make the final determination by referencing against the field data pulled via the API
 
 - Shortly after beginning to work on the above, we realized that the bulk data upload capabilities of OpenSpecimen are quite fragile. This is a big problem for us for a few reasons
   - We are transitioning to OpenSpecimen from a number of different legacy systems, so we will need to use it quite a lot
@@ -76,7 +76,7 @@ This package is designed to help overcome various points of friction discovered 
 - `Settings.fieldOutPath`
   - The path used to dictate where the fields Dataframe is saved (as .csv)
 - `Settings.cpOutPath`
-  - The path used to dictate where the collection protocol Dataframe is saved (as .csv)
+  - The path used to dictate where the Collection Protocol Dataframe is saved (as .csv)
 - `Settings.dropdownOutpath`
   - The path used to dictate where the dropdowns Dataframe is saved (as .csv)
 - `Settings.translatorInputDir`
@@ -91,17 +91,17 @@ This package is designed to help overcome various points of friction discovered 
   - A generic function to load and return a pandas Dataframe by passing in the path to a .csv
   - **path**: The path to the file that is to be read in
 - `Translator.getDiffReport(filePaths=None, fileNames=None, directComp=False, openOnFinish=False)`
-  - A generic function that compares two JSON files and creates a folder containing the two compared documents and the diff file itself
+  - A generic function that compares two JSON files and creates a folder containing the two compared documents and the Diff Report file itself
   - **filePaths**: A dictionary structured like `{"original": pathToOriginal, "comparison": pathToComparison}`
   - **fileNames**: A dictionary structured like `{"original": {"file": fileName, "env": envCode}, "comparison": {"file": fileName, "env": envCode}}`
   - **directComp**: Set `True` if the documents being compared are just from different environments and not translated vs. original
-  - **openOnFinish**: Set `True` to open the diff file when the function is done running
+  - **openOnFinish**: Set `True` to open the Diff Report file when the function is done running
 - `Translator.getFormName(blockName)`
   - Takes in a value that may be the name of an attached form and attempts to identify the form in the form Dataframe
-  - **blockName**: The suspected form name, sourced from the workflow text
+  - **blockName**: The suspected form name, sourced from the Workflow text
 - `Translator.translate(openDiff=False)`
   - The main function of the Translator object. Attempts to translate items specified in the input .csv, based on provided short title and environments
-  - **openDiff**: Set `True` to open the diff file when the function is done running
+  - **openDiff**: Set `True` to open the Diff Report file when the function is done running
 
 #### Integration
 - `Integration.renewTokens()`
@@ -122,7 +122,7 @@ This package is designed to help overcome various points of friction discovered 
   - **extension**: The extension to be appended to the default URL
   - **data**: A dictionary of any data the request may allow/require
   - **method**: The type of request; currently tested with `"PUT"` and `"POST"`
-  - **matchPPID**: Used when uploading participants; if `True`, will match existing participants in a collection protocol to those being uploaded based on PPID and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: Used when uploading participants; if `True`, will match existing participants in a Collection Protocol to those being uploaded based on PPID and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.postFile(env, extension, files)`
   - A generic function used to upload files via the OpenSpecimen API
   - **env**: The environment this upload is targeted at
@@ -149,16 +149,16 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.makeParticipants(env, matchPPID=False)`
   - Creates the Participant object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
-  - **matchPPID**: If `True`, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
-  - **matchPPID**: If `True`, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.universalUpload()`
   - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
 - `Integration.matchVisit(env, visitName)`
   - Matches visits against those that already exist in a given environment, based on that visit's name
   - **env**: The environment this function is targeted at
-  - **visitName**: The name of the visit to be matched. Will match only exact, but will match the first instance of that name, so must be unique within an given collection protocol
+  - **visitName**: The name of the visit to be matched. Will match only exact, but will match the first instance of that name, so must be unique within an given Collection Protocol
 - `Integration.makeVisits(env, universal=False)`
   - Creates the Visit object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
