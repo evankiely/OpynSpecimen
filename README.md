@@ -72,13 +72,13 @@ This package is designed to help overcome various points of friction discovered 
 - Settings.envs
   - A dictionary where the keys are the OpenSpecimen environment names, and the values are dictionaries. The sub-dictionaries consist of keys representing the details of the account used to access a given environment, and the values are the results of retrieving the specified environmental variables
 - Settings.formOutPath
-  - The path used to dictate where the forms dataframe is saved (as .csv)
+  - The path used to dictate where the forms Dataframe is saved (as .csv)
 - Settings.fieldOutPath
-  - The path used to dictate where the fields dataframe is saved (as .csv)
+  - The path used to dictate where the fields Dataframe is saved (as .csv)
 - Settings.cpOutPath
-  - The path used to dictate where the collection protocol dataframe is saved (as .csv)
+  - The path used to dictate where the collection protocol Dataframe is saved (as .csv)
 - Settings.dropdownOutpath
-  - The path used to dictate where the dropdowns dataframe is saved (as .csv)
+  - The path used to dictate where the dropdowns Dataframe is saved (as .csv)
 - Settings.translatorInputDir
   - The path used to dictate where the translator object should look for input documents
 - Settings.translatorOutputDir
@@ -88,7 +88,7 @@ This package is designed to help overcome various points of friction discovered 
 
 #### Translator
 - Translator.loadDF(path)
-  - A generic function to load and return a pandas dataframe by passing in the path to a .csv
+  - A generic function to load and return a pandas Dataframe by passing in the path to a .csv
   - **path**: The path to the file that is to be read in
 - Translator.getDiffReport(filePaths=None, fileNames=None, directComp=False, openOnFinish=False)
   - A generic function that compares two JSON files and creates a folder containing the two compared documents and the diff file itself
@@ -97,7 +97,7 @@ This package is designed to help overcome various points of friction discovered 
   - **directComp**: Set `True` if the documents being compared are just from different environments and not translated vs. original
   - **openOnFinish**: Set `True` to open the diff file when the function is done running
 - Translator.getFormName(blockName)
-  - Takes in a value that may be the name of an attached form and attempts to identify the form in the form dataframe
+  - Takes in a value that may be the name of an attached form and attempts to identify the form in the form Dataframe
   - **blockName**: The suspected form name, sourced from the workflow text
 - Translator.translate(openDiff=False)
   - The main function of the Translator object. Attempts to translate items specified in the input .csv, based on provided short title and environments
@@ -142,7 +142,7 @@ This package is designed to help overcome various points of friction discovered 
   - A generic function that cleans and formats pandas data types to something the OpenSpecimen API will accept
   - **val**: A piece of data. This is generally implied based on the column this function is applied to with pd.apply(cleanVal)
 - Integration.matchParticipants(env, pmis=None, empi=None)
-  - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI
+  - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI, which are system-wide IDs
   - **env**: The environment this function is targeted at
   - **pmis**: A dictionary structured like `{"siteName": mrnSite, "mrn": mrnVal}`
   - **empi**: The participant's empi as a string or integer
@@ -193,44 +193,44 @@ This package is designed to help overcome various points of friction discovered 
   - Sets the Collection Protocol Dataframe if the .csv exists, or builds a new copy by calling syncWorkflowList. Since it sets `wantDF=True` when calling syncWorkflowList the .csv copy of the Collection Protocol Dataframe is not updated when this is invoked
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncWorkflowList(envs=None, wantDF=False)
-  - Creates a new dataframe of Collection Protocols which are available in the provided environment(s)
+  - Creates a new Dataframe of Collection Protocols which are available in the provided environment(s), as well as their internal reference codes
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
-  - **wantDF**: Indicates if the user wants the function to return the new dataframe. If so, the dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
 - Integration.syncWorkflows(envs=None)
-  - Pulls down copies of the Workflows for all Collection Protocols in the Collection Protocol dataframe, as long as those Workflows are not empty
+  - Pulls down copies of the Workflows for all Collection Protocols in the Collection Protocol Dataframe, generated by generated by syncWorkflowList, as long as those Workflows are not empty
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.setFormDF(envs=None)
   - Sets the Form Dataframe if the .csv exists, or builds a new copy by calling syncFormList. Since it sets `wantDF=True` when calling syncFormList the .csv copy of the Form Dataframe is not updated when this is invoked
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncFormList(envs=None, wantDF=False)
-  - 
+  - Creates a new Dataframe of Forms which are available in the provided environment(s), as well as their internal reference codes and when they were last modified/updated
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
-  - **wantDF**: 
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
 - Integration.setFieldDF(envs=None)
-  - 
+  - Sets the Field Dataframe if the .csv exists, or builds a new copy by calling syncFieldList. Since it sets `wantDF=True` when calling syncFieldList the .csv copy of the Field Dataframe is not updated when this is invoked
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncFieldList(envs=None, wantDF=False)
-  - 
+  - Creates a new Dataframe of Fields and Subfields, as well as their internal reference codes, which are available in the provided environment(s), given that environment's forms, which are given in the Dataframe generated by syncFormList
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
-  - **wantDF**: 
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
 - Integration.setDropdownDF(envs=None)
-  - 
+  - Sets the Dropdowns Dataframe if the .csv exists, or builds a new copy by calling syncDropdownList. Since it sets `wantDF=True` when calling syncDropdownList the .csv copy of the Dropdowns Dataframe is not updated when this is invoked
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncDropdownList(envs=None, wantDF=False)
-  - 
+  - Creates a new Dataframe of Dropdowns which are available in the provided environment(s), and their environment specific names
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
-  - **wantDF**: 
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
 - Integration.syncDropdownPVs(envs=None)
-  - 
+  - Creates a new Dataframe of Permissible Values which are available in the provided environment(s), given that environment's dropdowns Dataframe, generated by syncDropdownList
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.updateAll(envs=None)
-  - 
+  - Calls the following functions in order: updateWorkflows, updateForms
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.updateWorkflows(envs=None)
-  - 
+  - Updates Workflow Dataframe and Files (i.e. JSON), including removing any no longer in use
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.updateForms(envs=None)
-  - 
+  - Updates Forms and Fields Dataframes, including removing any that are no longer in use
   - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 
 #### Upload Classes
