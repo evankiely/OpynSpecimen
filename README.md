@@ -139,8 +139,8 @@ This package is designed to help overcome various points of friction discovered 
   - A generic function that cleans and formats dates to something the OpenSpecimen API will accept
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with pd.apply(cleanDateForAPI)
 - Integration.cleanVal(val)
-  - 
-  - **val**: 
+  - A generic function that cleans and formats pandas data types to something the OpenSpecimen API will accept
+  - **val**: A piece of data. This is generally implied based on the column this function is applied to with pd.apply(cleanVal)
 - Integration.matchParticipants(env, pmis=None, empi=None)
   - 
   - 
