@@ -108,9 +108,9 @@ This package is designed to help overcome various points of friction discovered 
   - Retrieves updated API keys
 - Integration.getTokens()
   - Retrieves initial API keys, upon instantiation
-- Integration.syncAll(syncDropdownPVs=None)
+- Integration.syncAll(envs=None)
   - Calls the following functions in order: syncWorkflowList, syncWorkflows, syncFormList, syncFieldList, syncDropdownList, syncDropdownPVs
-  - **syncDropdownPVs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.getResponse(env, extension, params=None)
   - A generic GET request
   - **env**: The environment this request is targeted at
@@ -142,95 +142,96 @@ This package is designed to help overcome various points of friction discovered 
   - A generic function that cleans and formats pandas data types to something the OpenSpecimen API will accept
   - **val**: A piece of data. This is generally implied based on the column this function is applied to with pd.apply(cleanVal)
 - Integration.matchParticipants(env, pmis=None, empi=None)
-  - 
-  - 
-  - 
-  - 
+  - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI
+  - **env**: The environment this function is targeted at
+  - **pmis**: A dictionary structured like `{"siteName": mrnSite, "mrn": mrnVal}`
+  - **empi**: The participant's empi as a string or integer
 - Integration.makeParticipants(env, matchPPID=False)
-  - 
-  - 
-  - 
+  - Creates the Participant object, populates it with data, and passes it to be uploaded
+  - **env**: The environment this function is targeted at
+  - **matchPPID**: If True, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - Integration.uploadParticipants(matchPPID=False)
-  - 
-  - 
+  - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
+  - **matchPPID**: If True, will match existing participants in a collection protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - Integration.universalUpload()
-  - 
+  - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
 - Integration.matchVisit(env, visitName)
   - 
-  - 
-  - 
+  - **env**: The environment this function is targeted at
+  - **visitName**: 
 - Integration.makeVisits(env, universal=False)
   - 
-  - 
-  - 
+  - **env**: The environment this function is targeted at
+  - **universal**: 
 - Integration.uploadVisits()
   - 
 - Integration.recursiveSpecimens(env, parentSpecimen=None)
   - 
-  - 
-  - 
+  - **env**: The environment this function is targeted at
+  - **parentSpecimen**: 
 - Integration.uploadSpecimens()
   - 
 - Integration.makeSpecimen(env, data, referenceSpec={})
   - 
-  - 
-  - 
-  - 
+  - **env**: The environment this function is targeted at
+  - **data**: 
+  - **referenceSpec**: 
 - Integration.makeAliquot(env, data, referenceSpec={})
   - 
-  - 
-  - 
-  - 
+  - **env**: The environment this function is targeted at
+  - **data**: 
+  - **referenceSpec**: 
 - Integration.buildExtensionDetail(env, formExten, data)
   - 
-  - 
-  - 
-  - 
+  - **env**: The environment this function is targeted at
+  - **formExten**: 
+  - **data**: 
 - Integration.validateInputFiles(keyword)
   - 
-  - 
+  - **keyword**: 
 - Integration.setCPDF(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncWorkflowList(envs=None, wantDF=False)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
+  - **wantDF**: 
 - Integration.syncWorkflows(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.setFormDF(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncFormList(envs=None, wantDF=False)
   - 
-  - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
+  - **wantDF**: 
 - Integration.setFieldDF(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncFieldList(envs=None, wantDF=False)
   - 
-  - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
+  - **wantDF**: 
 - Integration.setDropdownDF(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.syncDropdownList(envs=None, wantDF=False)
   - 
-  - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
+  - **wantDF**: 
 - Integration.syncDropdownPVs(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.updateAll(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.updateWorkflows(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 - Integration.updateForms(envs=None)
   - 
-  - 
+  - **envs**: A list of the environments these actions should be done for/applied to. If None, default is to use all specified in Settings.envs
 
 #### Upload Classes
 - See the entry under Core Functionality for more information. These objects largely store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
