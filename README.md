@@ -183,6 +183,21 @@ This package is designed to help overcome various points of friction discovered 
   - **env**: The environment this function is targeted at
   - **data**: The data used to create the Aliquot object
   - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
+- `Integration.matchArray(env, arrayName)`
+  - Matches arrays against those that already exist in a given environment, based on that array's name
+  - **env**: The environment this function is targeted at
+  - **arrayName**: The name of the array to be matched. Will match only exact, but will match the first instance of that name, so must be unique within OpenSpecimen
+- `Integration.populateArray(env, arrayDetails={})`
+  - Creates the Core object, populates it with data, and passes it to be uploaded
+  - **env**: The environment this function is targeted at
+  - **arrayDetails**: A dictionary structured like `{"name": arrayName, "id": arrayId}`
+- `Integration.makeArray(env, forcePending)`
+  - Creates the Array object, populates it with data, and passes it to be uploaded
+  - **env**: The environment this function is targeted at
+  - **forcePending**: Whether or not to set arrays to pending status before attempting to create/update them. Use this if the array might already exist and could be marked as completed. Always sets the array status to completed after populating with specimens
+- `Integration.uploadArrays(forcePending=False)`
+  - The function that is called to begin the array upload process. Looks for a document named in the following format: "arrays_[envCode]_miscOtherInfo.csv"
+  - **forcePending**: Whether or not to set arrays to pending status before attempting to create/update them. Use this if the array might already exist and could be marked as completed. Always sets the array status to completed after populating with specimens
 - `Integration.buildExtensionDetail(env, formExten, data)`
   - Creates the Extension object, populates it with data, and passes it to be uploaded. Extension Details are things like Participant/Visit/Specimen Additional Fields, and Event Fields
   - **env**: The environment this function is targeted at
