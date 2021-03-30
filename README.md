@@ -164,7 +164,7 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.makeVisits(env, universal=False)`
   - Creates the Visit object, populates it with data, and passes it to be uploaded
   - **env**: The environment this function is targeted at
-  - **universal**: Set `True` to indicate this visit is part of a "Universal" upload
+  - **universal**: Set `True` to indicate this visit is part of a "Universal" upload; changes a couple column headers the function looks for when pulling info
 - `Integration.uploadVisits()`
   - The function that is called to begin the visit upload process. Looks for a document named in the following format: "visits_[envCode]_miscOtherInfo.csv"
 - `Integration.recursiveSpecimens(env, parentSpecimen=None)`
