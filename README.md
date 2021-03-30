@@ -251,7 +251,7 @@ This package is designed to help overcome various points of friction discovered 
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
 
 #### Upload Classes
-- See the entry under Core Functionality for more information. These objects largely store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
+- See the entry under [Core Functionality](https://github.com/evankiely/OpynSpecimen/blob/main/README.md#core-functionality) for more information. These objects largely store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
 
 ## License
 This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/evankiely/OpynSpecimen/blob/main/LICENSE). For more permissive licensing in the case of commercial usage, please contact the [Office of Technology Transfer](http://www.ott.emory.edu/) at Emory University, and reference Emory TechID 21074
