@@ -16,12 +16,13 @@ import os
 import json
 import time
 import shutil
+from datetime import datetime, timezone
 
-import numpy
 import requests
+import numpy as np
 import pandas as pd
 
-# from tqdm import tqdm
+from tqdm import tqdm
 import jsonpickle as jp
 
 from uploadClasses import *
@@ -35,6 +36,8 @@ class Integration(Settings):
     def __init__(self):
 
         super().__init__()
+        self.currentEnv = None
+        self.isUniversal = False
         self.authTokens = self.getTokens()
 
     #  ---------------------------------------------------------------------
@@ -77,16 +80,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def getResponse(self, env, extension, params=None):
+    def getResponse(self, extension, params=None):
 
-        if env == "prod":
+        if self.currentEnv == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", env)
+            url = self.baseURL.replace("_", self.currentEnv)
 
         url += extension
-        token = self.authTokens[env]
+        token = self.authTokens[self.currentEnv]
         headers = {"X-OS-API-TOKEN": token}
 
         if params is not None:
@@ -115,16 +118,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------  Maybe combine these response functions with the method kwarg determining function? maybe pull matchPPID into its own function?
 
-    def postResponse(self, env, extension, data, method="POST", matchPPID=False):
+    def postResponse(self, extension, data, method="POST", matchPPID=False):
 
-        if env == "prod":
+        if self.currentEnv == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", env)
+            url = self.baseURL.replace("_", self.currentEnv)
 
         url += extension
-        token = self.authTokens[env]
+        token = self.authTokens[self.currentEnv]
         headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
 
         obj = data
@@ -148,14 +151,14 @@ class Integration(Settings):
                 }
 
                 matchExtension = extension + "list"
-                response = self.postResponse(env, matchExtension, matchData)
+                response = self.postResponse(matchExtension, matchData)
 
                 #  if there is a match, get the match's cprId and use that to update the info associated with that participant
                 if response:
 
                     #  extension needs to be CPR ID for participant who matched PPID in the CP of interest
                     extension += str(response[0]["id"])
-                    response = self.postResponse(env, extension, obj, method="PUT")
+                    response = self.postResponse(extension, obj, method="PUT")
 
             else:
 
@@ -174,16 +177,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def postFile(self, env, extension, files):
+    def postFile(self, extension, files):
 
-        if env == "prod":
+        if self.currentEnv == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", env)
+            url = self.baseURL.replace("_", self.currentEnv)
 
         url += extension
-        token = self.authTokens[env]
+        token = self.authTokens[self.currentEnv]
         headers = {"X-OS-API-TOKEN": token}
         response = requests.request("POST", url, headers=headers, files=files)
 
@@ -211,7 +214,7 @@ class Integration(Settings):
                 raise TypeError("Input files must be of type .CSV")
 
             if item.split("_")[1].lower() in self.envs.keys():
-                env = item.split("_")[1].lower()
+                self.currentEnv = item.split("_")[1].lower()
 
             else:
                 raise KeyError(
@@ -240,7 +243,7 @@ class Integration(Settings):
             formatDF.to_csv(inputItemLoc, index=False)
             extension = self.uploadExtension + "input-file"
             files = [("file", (".csv", open(inputItemLoc, "rb"), "application/octet-stream"))]
-            fileID = self.postFile(env, extension, files)
+            fileID = self.postFile(extension, files)
             fileID = fileID["fileId"]
 
             data = {
@@ -249,7 +252,7 @@ class Integration(Settings):
                 "inputFileId": fileID,
             }
 
-            uploadResponse = self.postResponse(env, self.uploadExtension, data)
+            uploadResponse = self.postResponse(self.uploadExtension, data)
             uploadID = uploadResponse["id"]
 
             if checkStatus:
@@ -259,7 +262,7 @@ class Integration(Settings):
                 extension = self.uploadExtension + str(uploadID)
 
                 while status is None:
-                    uploadStatus = self.getResponse(env, extension)
+                    uploadStatus = self.getResponse(extension)
 
                     if uploadStatus and "status" in uploadStatus.keys():
 
@@ -269,7 +272,7 @@ class Integration(Settings):
                             if status == "failed":
 
                                 extension += "/output"
-                                uploadStatus = self.getResponse(env, extension)
+                                uploadStatus = self.getResponse(extension)
 
                                 with open(
                                     f"{self.translatorOutputDir}/Failed Upload {uploadID} Report.csv",
@@ -314,7 +317,7 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
     #  converting dates to OpS acceptable format -- UPDATE: use regex to pattern match and be more flexible in the format that can be accepted?
-    def cleanDateForAPI(self, date):
+    def cleanDateForAPI(self, date, col):
 
         if pd.isna(date):
             return None
@@ -339,27 +342,21 @@ class Integration(Settings):
 
             date = "-".join([date[2], date[0], date[1]])
 
-        return date
+            if "birth" not in col.lower() and "death" not in col.lower():
+                # 4 digit year-2 digit month-2 digit day hour(non-24):minute am/pm val --> see https://docs.python.org/3/library/time.html#time.strftime
+                dt = datetime.strptime(f"{date} 12:00pm", "%Y-%m-%d %I:%M%p").astimezone()
+                timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
+                # OpenSpecimen converts to timezone on the server, so will subtract 4/5 hours for est (relative to utc)
+                # if you don't specify a time, it assumes midnight that day, which is then converted to est, pushing the date back to the day before
+                # so we put the time as noon always, or 11:59, or if it has a timestamp, maybe add 4 or 5 hours? this gets to be a lot...
 
-    #  ---------------------------------------------------------------------
-    #  helpful because, when storing mixed ints and nones in pandas, the ints are converted to float, because that is how pandas represents nones
-    def cleanVal(self, val):
+                return timestamp
 
-        if pd.isna(val):
-            return val
-
-        elif isinstance(val, numpy.int64):
-            return int(val)
-
-        elif isinstance(val, numpy.float64):
-            return float(val)
-
-        else:
-            return val
+            return date
 
     #  ---------------------------------------------------------------------
     #  uses system-wide ids to match an existing participant profile
-    def matchParticipants(self, env, pmis=None, empi=None):
+    def matchParticipants(self, pmis=None, empi=None):
 
         if isinstance(pmis, dict):
             passVals = ["pmi", pmis]
@@ -379,7 +376,7 @@ class Integration(Settings):
                 raise KeyError("must pass non-None type pmis (dict) or empi (string or integer)")
 
         indentifier = {passVals[0]: passVals[1], "reqRegInfo": True}
-        details = self.postResponse(env, self.findMatchExtension, indentifier)
+        details = self.postResponse(self.findMatchExtension, indentifier)
 
         if details:
 
@@ -392,16 +389,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def makeParticipants(self, env, matchPPID=False):
+    def makeParticipants(self, matchPPID=False):
 
         cols = self.participantDF.columns.values
 
         for col in cols:
             #  format to something OpS will accept
             if "date" in col.lower():
-                self.participantDF[col] = self.participantDF[col].apply(self.cleanDateForAPI)
+                self.participantDF[col] = self.participantDF[col].apply(self.cleanDateForAPI, args=[col])
 
-        for ind, data in self.participantDF.iterrows():
+        for ind, data in tqdm(self.participantDF.iterrows(), desc="Participant Uploads", unit=" Participants"):
 
             extension = self.registerParticipantExtension
 
@@ -412,7 +409,7 @@ class Integration(Settings):
 
             #  if so, we should account for that in our data source as well as in our upload, so we get the required form id and name, and set the form data frame
             if formExten:
-                exten = self.buildExtensionDetail(env, formExten, data)
+                exten = self.buildExtensionDetail(formExten, data)
 
                 #  now we define all the remaining variables
             data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
@@ -474,14 +471,14 @@ class Integration(Settings):
             #  will be skipped if len == 0, otherwise it will check every PMI val for match until a match is found or there are no more PMIs to check
             for pmi in pmis:
                 if matchedVals is None:
-                    matchedVals = self.matchParticipants(env, pmis=pmi)
+                    matchedVals = self.matchParticipants(pmis=pmi)
 
                 else:
                     break
 
             #  if there are no PMIs above, or no matches to them, and there is a value for empi, try that instead
             if matchedVals is None and empi is not None:
-                matchedVals = self.matchParticipants(env, empi=empi)
+                matchedVals = self.matchParticipants(empi=empi)
 
             #  otherwise, regardless of matched from PMIs or empi, as long as there is a match, we can move forward with using the existing profile
             if matchedVals is not None:
@@ -493,16 +490,16 @@ class Integration(Settings):
                 if cpShortTitle in registeredCPs:
 
                     extension += str(matchedVals[cpShortTitle])
-                    response = self.postResponse(env, extension, participant, method="PUT")
+                    response = self.postResponse(extension, participant, method="PUT")
 
                 #  otherwise, since they exist in some other cp, do it as register existing participant to new cp
                 #  matchPPID allows the function to look for cases where PPID matches to a participant in the CP, even though the MRN/EMPI was absent/failed to match
                 else:
-                    response = self.postResponse(env, extension, participant, matchPPID=matchPPID)
+                    response = self.postResponse(extension, participant, matchPPID=matchPPID)
 
             #  finally, if they don't exist in openspecimen at all, just make them a new profile
             else:
-                response = self.postResponse(env, extension, participant, matchPPID=matchPPID)
+                response = self.postResponse(extension, participant, matchPPID=matchPPID)
 
     #  ---------------------------------------------------------------------
     #  This is a confusing function because OpS relies very heavily on generic attribute names. In this case, what is meant by "id" in the docs varies by context
@@ -527,8 +524,10 @@ class Integration(Settings):
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
+            self.currentEnv = env
+
             self.participantDF = pd.read_csv(item)
-            self.setCPDF(envs=env)
+            self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
             cpIDs = self.participantDF["CP Short Title"].unique()
@@ -542,17 +541,17 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             participantExtension = "/participants/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(env, participantExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(participantExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
-            self.makeParticipants(env, matchPPID=matchPPID)
+            self.makeParticipants(matchPPID=matchPPID)
 
             shutil.move(item, self.translatorOutputDir)
 
     #  ---------------------------------------------------------------------
 
-    def universalUpload(self):
+    def universalUpload(self, matchPPID=False):
 
         #  break file ingest out of all upload functions and into its own thing -- return clean and prepped df (validate against permissible values, etc.)
         #  then modify the upload functions take in a df so that they can be strung together and fed dfs with the requisite info
@@ -561,12 +560,15 @@ class Integration(Settings):
         #  pull out visits and reference against the new participant info df to avoid looking stuff up (aside from if the visit already exists, etc.), and save new info
         #  repeat for specimens
 
+        self.isUniversal = True
         inputItems = self.validateInputFiles("universal")
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
-            universalDF = pd.read_csv(item)
-            self.setCPDF(envs=env)
+            self.currentEnv = env
+
+            universalDF = pd.read_csv(item, dtype=str)
+            self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
             cpIDs = universalDF["CP Short Title"].unique()
@@ -576,6 +578,8 @@ class Integration(Settings):
                 )
                 for cpShortTitle in cpIDs
             }
+
+            #  NOTE: also drop any irrelevant specimen/visit columns to reduce redundant processing, etc. and do so for all the below
             #  , "PMI#1#Site Name", "PMI#1#MRN"
             self.participantDF = universalDF.drop_duplicates(
                 subset=[
@@ -590,30 +594,30 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             participantExtension = "/participants/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(env, participantExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(participantExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
-            self.makeParticipants(env)
+            self.makeParticipants(matchPPID=matchPPID)
 
-            #  multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
+            # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
             self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"])
 
             #  getting all visit additional field form info and making a dict as above
             visitExtension = "/visits/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(env, visitExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(visitExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
-            self.makeVisits(env, universal=True)
+            self.makeVisits()
 
             self.specimenDF = universalDF.drop_duplicates(subset=["Specimen Label"])
 
             #  getting all specimen additional field form info and making a dict as above
             specimenExtension = "/specimens/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(env, specimenExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(specimenExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -624,19 +628,21 @@ class Integration(Settings):
 
                 #  format to something OpS will accept
                 if "date" in col.lower():
-                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForAPI)
+                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForAPI, args=[col])
 
-            self.recursiveSpecimens(env)
+            self.recursiveSpecimens()
 
             shutil.move(item, self.translatorOutputDir)
 
+        self.isUniversal = False
+
     #  ---------------------------------------------------------------------
 
-    def matchVisit(self, env, visitName):
+    def matchVisit(self, visitName):
 
         visitExten = "visits/bynamespr"
         params = {"visitName": visitName, "exactMatch": True}
-        visitId = self.getResponse(env, visitExten, params=params)
+        visitId = self.getResponse(visitExten, params=params)
 
         if visitId:
 
@@ -648,7 +654,7 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def makeVisits(self, env, universal=False):
+    def makeVisits(self):
 
         cols = self.visitDF.columns.values
 
@@ -656,15 +662,15 @@ class Integration(Settings):
 
             #  format to something OpS will accept
             if "date" in col.lower():
-                self.visitDF[col] = self.visitDF[col].apply(self.cleanDateForAPI)
+                self.visitDF[col] = self.visitDF[col].apply(self.cleanDateForAPI, args=[col])
 
-        for ind, data in self.visitDF.iterrows():
+        for ind, data in tqdm(self.visitDF.iterrows(), desc="Visit Uploads", unit=" Visits"):
 
             extension = "visits/"
             formExten = self.formExtensions[data["CP Short Title"]]
 
             if formExten:
-                extensionDetail = self.buildExtensionDetail(env, formExten, data)
+                extensionDetail = self.buildExtensionDetail(formExten, data)
 
             #  since it's required for specimen class, and attrsMap defaults to an empty dict, go ahead and make an empty instance
             else:
@@ -683,7 +689,7 @@ class Integration(Settings):
             cohort, visitDate = data.get("Cohort"), data.get("Visit Date")
             cprId, eventPoint = None, data.get("Event Point")
 
-            if universal:
+            if self.isUniversal:
                 comments, name = data.get("Visit Comments"), data.get("Visit Name")
 
             else:
@@ -716,15 +722,15 @@ class Integration(Settings):
                 cprId,
             )
 
-            visit.code = self.matchVisit(env, name)
+            visit.code = self.matchVisit(name)
 
             if visit.code:
 
                 extension += str(visit.code)
-                self.postResponse(env, extension, visit, method="PUT")
+                self.postResponse(extension, visit, method="PUT")
 
             else:
-                self.postResponse(env, extension, visit)
+                self.postResponse(extension, visit)
 
     #  ---------------------------------------------------------------------
     #  still need to account for visit additional fields, and logging failures, etc.
@@ -734,8 +740,9 @@ class Integration(Settings):
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
-            self.visitDF = pd.read_csv(item)
-            self.setCPDF(envs=env)
+            self.currentEnv = env
+            self.visitDF = pd.read_csv(item, dtype=str)
+            self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
             cpIDs = self.visitDF["CP Short Title"].unique()
@@ -747,22 +754,23 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             visitExtension = "/visits/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(env, visitExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(visitExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
-            self.makeVisits(env)
+            self.makeVisits()
 
             shutil.move(item, self.translatorOutputDir)
 
     #  ---------------------------------------------------------------------
     #  eventually move to recursive .apply()? need to figure out how to pass args
-    def recursiveSpecimens(self, env, parentSpecimen=None):
+    def recursiveSpecimens(self, parentSpecimen=None):
 
         #  simple way of avoiding dealing with lists of aliquots for now, since they're unlikely to actually be parent of anything in the near term
         if isinstance(parentSpecimen, list):
             return
 
+        #  NOTE: for cases where labels are integers, convert to string then strip the .0, because pandas will represent int as floats for any column where there are NaNs
         if parentSpecimen:
             filt = (self.specimenDF["Parent Specimen Label"] == parentSpecimen["label"]) & (
                 self.specimenDF["Lineage"].str.lower() != "new"
@@ -780,7 +788,7 @@ class Integration(Settings):
 
         else:
 
-            for ind, data in self.specimenDF.loc[filt].iterrows():
+            for ind, data in tqdm(self.specimenDF.loc[filt].iterrows(), desc="Recursive Specimens", unit=" Specimens"):
 
                 #  aliquot label format may be set at system level, so better to be accomodative in those cases
                 if not pd.isna(data["Specimen Label"]) or data["Lineage"].lower() == "aliquot":
@@ -788,7 +796,7 @@ class Integration(Settings):
                     specimenLabel = data["Specimen Label"]
                     extension = "specimens/"
                     params = {"label": specimenLabel, "exactMatch": True}
-                    matchedSpecimen = self.getResponse(env, extension, params=params)
+                    matchedSpecimen = self.getResponse(extension, params=params)
 
                     if matchedSpecimen:
 
@@ -798,45 +806,45 @@ class Integration(Settings):
                         if data["Lineage"].lower() != "aliquot":
 
                             ref = {"Matched": matchedSpecimen}
-                            specimen = self.makeSpecimen(env, data, referenceSpec=ref)
+                            specimen = self.makeSpecimen(data, referenceSpec=ref)
 
                         else:
 
                             extension = "specimens/collect"
                             ref = {"Matched": matchedSpecimen}
-                            specimen = self.makeAliquot(env, data, referenceSpec=ref)
+                            specimen = self.makeAliquot(data, referenceSpec=ref)
 
-                        response = self.postResponse(env, extension, specimen, method="PUT")
-                        self.recursiveSpecimens(env, parentSpecimen=response)
+                        response = self.postResponse(extension, specimen, method="PUT")
+                        self.recursiveSpecimens(parentSpecimen=response)
 
                     elif parentSpecimen:
 
                         if data["Lineage"].lower() != "aliquot":
 
                             ref = {"Parent": parentSpecimen}
-                            specimen = self.makeSpecimen(env, data, referenceSpec=ref)
+                            specimen = self.makeSpecimen(data, referenceSpec=ref)
 
                         else:
 
                             extension = "specimens/collect"
                             ref = {"Parent": parentSpecimen}
-                            specimen = self.makeAliquot(env, data, referenceSpec=ref)
+                            specimen = self.makeAliquot(data, referenceSpec=ref)
 
-                        response = self.postResponse(env, extension, specimen)
-                        self.recursiveSpecimens(env, parentSpecimen=response)
+                        response = self.postResponse(extension, specimen)
+                        self.recursiveSpecimens(parentSpecimen=response)
 
                     else:
 
                         if data["Lineage"].lower() != "aliquot":
-                            specimen = self.makeSpecimen(env, data)
+                            specimen = self.makeSpecimen(data)
 
                         else:
 
                             extension = "specimens/collect"
-                            specimen = self.makeAliquot(env, data)
+                            specimen = self.makeAliquot(data)
 
-                        response = self.postResponse(env, extension, specimen)
-                        self.recursiveSpecimens(env, parentSpecimen=response)
+                        response = self.postResponse(extension, specimen)
+                        self.recursiveSpecimens(parentSpecimen=response)
 
                 else:
 
@@ -853,9 +861,10 @@ class Integration(Settings):
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
-            specimenDF = pd.read_csv(item)
+            self.currentEnv = env
+            specimenDF = pd.read_csv(item, dtype=str)
             cols = specimenDF.columns.values
-            self.setCPDF(envs=env)
+            self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
             cpIDs = specimenDF["CP Short Title"].unique()
@@ -867,7 +876,7 @@ class Integration(Settings):
             #  getting all specimen additional field form info and making a dict as above
             specimenExtension = "/specimens/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(env, specimenExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(specimenExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -876,22 +885,22 @@ class Integration(Settings):
 
                 #  format to something OpS will accept
                 if "date" in col.lower():
-                    specimenDF[col] = specimenDF[col].apply(self.cleanDateForAPI)
+                    specimenDF[col] = specimenDF[col].apply(self.cleanDateForAPI, args=[col])
 
             self.specimenDF = specimenDF
 
-            self.recursiveSpecimens(env)
+            self.recursiveSpecimens()
 
             shutil.move(item, self.translatorOutputDir)
 
     #  ---------------------------------------------------------------------
 
-    def makeSpecimen(self, env, data, referenceSpec={}):
+    def makeSpecimen(self, data, referenceSpec={}):
 
         formExten = self.formExtensions[data["CP Short Title"]]
 
         if formExten:
-            extensionDetail = self.buildExtensionDetail(env, formExten, data)
+            extensionDetail = self.buildExtensionDetail(formExten, data)
 
         #  since it's required for specimen class, and attrsMap defaults to an empty dict, go ahead and make an empty instance
         else:
@@ -910,10 +919,25 @@ class Integration(Settings):
 
         biohazards = [data.get(col) for col in cols if "biohazard" in col.lower() and data.get(col) is not None]
 
+        if self.isUniversal:
+            storageLocation = {
+                "name": data.get("Container"),
+                "positionX": data.get("Row"),
+                "positionY": data.get("Column"),
+            }
+
+        else:
+            storageLocation = {
+                "name": data.get("Location#Container"),
+                "positionX": data.get("Location#Row"),
+                "positionY": data.get("Location#Column"),
+            }
+
+        #  dealing with pandas converting mixed int and Nones to floats again...
         storageLocation = {
-            "name": data.get("Location#Container"),
-            "positionX": data.get("Location#Row"),
-            "positionY": data.get("Location#Column"),
+            key: int(val)
+            for key, val in zip(storageLocation.keys(), storageLocation.values())
+            if isinstance(val, float)
         }
 
         if referenceSpec.get("Matched"):
@@ -985,7 +1009,7 @@ class Integration(Settings):
         else:
 
             visitName = data.get("Visit Name")
-            visitId = self.matchVisit(env, visitName)
+            visitId = self.matchVisit(visitName)
 
             if visitId:
 
@@ -1036,12 +1060,12 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def makeAliquot(self, env, data, referenceSpec={}):
+    def makeAliquot(self, data, referenceSpec={}):
 
         formExten = self.formExtensions[data["CP Short Title"]]
 
         if formExten:
-            extensionDetail = self.buildExtensionDetail(env, formExten, data)
+            extensionDetail = self.buildExtensionDetail(formExten, data)
 
         else:
             extensionDetail = Extension()
@@ -1082,11 +1106,11 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def matchArray(self, env, arrayName):
+    def matchArray(self, arrayName):
 
         arrayExten = "specimen-arrays/"
         params = {"name": arrayName, "exactMatch": True}
-        arrayInfo = self.getResponse(env, arrayExten, params=params)
+        arrayInfo = self.getResponse(arrayExten, params=params)
 
         if arrayInfo:
 
@@ -1098,7 +1122,7 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def populateArray(self, env, arrayDetails={}):
+    def populateArray(self, arrayDetails={}):
 
         extension = f"specimen-arrays/{arrayDetails['id']}/cores"
         cols = self.coreDF.columns.values
@@ -1106,7 +1130,7 @@ class Integration(Settings):
 
         filt = self.coreDF["Name"] == arrayDetails["name"]
 
-        for ind, data in self.coreDF.loc[filt].iterrows():
+        for ind, data in tqdm(self.coreDF.loc[filt].iterrows(), desc="Core Uploads", unit=" Cores"):
 
             data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
             row = data.get("Cores Detail#Row")
@@ -1123,11 +1147,11 @@ class Integration(Settings):
 
             cores.cores.append(specimen)
 
-        self.postResponse(env, extension, cores, method="PUT")
+        self.postResponse(extension, cores, method="PUT")
 
     #  ---------------------------------------------------------------------
 
-    def makeArray(self, env, forcePending):
+    def makeArray(self, forcePending):
 
         cols = self.coreDF.columns.values
 
@@ -1135,11 +1159,11 @@ class Integration(Settings):
 
             #  format to something OpS will accept
             if "date" in col.lower():
-                self.coreDF[col] = self.coreDF[col].apply(self.cleanDateForAPI)
+                self.coreDF[col] = self.coreDF[col].apply(self.cleanDateForAPI, args=[col])
 
         self.arrayDF = self.coreDF.drop_duplicates(subset=["Name"])
 
-        for ind, data in self.arrayDF.iterrows():
+        for ind, data in tqdm(self.arrayDF.iterrows(), desc="Array Uploads", unit=" Arrays"):
 
             extension = "specimen-arrays/"
             setComplete = False
@@ -1174,25 +1198,25 @@ class Integration(Settings):
                 setComplete = True
                 array.status = "PENDING"
 
-            array.id = self.matchArray(env, name)
+            array.id = self.matchArray(name)
 
             if array.id:
 
                 extension += str(array.id)
-                self.postResponse(env, extension, array, method="PUT")
+                self.postResponse(extension, array, method="PUT")
 
             else:
 
-                response = self.postResponse(env, extension, array)
+                response = self.postResponse(extension, array)
                 array.id = response["id"]
 
             arrayDetails = {"name": array.name, "id": array.id}
-            self.populateArray(env, arrayDetails=arrayDetails)
+            self.populateArray(arrayDetails=arrayDetails)
 
             if setComplete:
 
                 array.status = "COMPLETED"
-                self.postResponse(env, extension, array, method="PUT")
+                self.postResponse(extension, array, method="PUT")
 
     #  ---------------------------------------------------------------------
 
@@ -1202,40 +1226,40 @@ class Integration(Settings):
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
-            self.coreDF = pd.read_csv(item)
-            self.setCPDF(envs=env)
+            self.currentEnv = env
+            self.coreDF = pd.read_csv(item, dtype=str)
+            self.setCPDF()
 
-            self.makeArray(env, forcePending)
+            self.makeArray(forcePending)
 
             shutil.move(item, self.translatorOutputDir)
 
     #  ---------------------------------------------------------------------
 
-    def buildExtensionDetail(self, env, formExten, data):
+    def buildExtensionDetail(self, formExten, data):
         #  TODO: accomodate specimenEvents (these are env-wide; stainingEvent, qualityAssuranceAndControl, etc.) --> https://openspecimendev.winship.emory.edu/rest/ng/forms?formType=specimenEvent
 
         formId = formExten["formId"]
         formName = formExten["formName"]
-        self.setFormDF(env)
+        self.setFormDF()
 
         #  if there are none vals mixed in, we account for their under the hood float type, which forces ints to be represented as floats in the DF too
-        formFilt = (self.formDF[f"{env}ShortName"] == formName) & (
-            self.formDF[env].astype(int, errors="ignore") == formId
+        formFilt = (self.formDF[f"{self.currentEnv}ShortName"] == formName) & (
+            self.formDF[self.currentEnv].astype(int, errors="ignore") == formId
         )
         formName = self.formDF.loc[formFilt, "formName"].item()
 
         #  set the field DF and then establish filters
-        self.setFieldDF(env)
-        fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[env] != pd.NA)
+        self.setFieldDF()
+        fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[self.currentEnv] != pd.NA)
 
         #  using a dictionary comprehension to build key value pairs of field name and the env specific code that is used to reference them
         fieldDict = {
             field: code
             for field, code in zip(
                 self.fieldDF.loc[fieldFilt, "fieldName"],
-                self.fieldDF.loc[fieldFilt, env].astype(str),
+                self.fieldDF.loc[fieldFilt, self.currentEnv].astype(str),
             )
-            if "SF" not in code
         }
 
         #  using a dictionary comprehension to build key value pairs of the env specific code that is used to reference specific fields, and the data that is to be associated with them
@@ -1244,6 +1268,32 @@ class Integration(Settings):
             for name, data in zip(data.index, data.values)
             if name.split("#")[0] == formName and name.split("#")[1] in fieldDict.keys() and not pd.isna(data)
         }
+
+        subFieldData = {
+            f"{name.split('#')[2]}_{name.split('#')[3]}": data
+            for name, data in zip(data.index, data.values)
+            if name.split("#")[0] == formName and len(name.split("#")) == 4 and not pd.isna(data)
+        }
+
+        for key in attrsDict.keys():
+
+            if "SF" in key:
+
+                codeFilt = self.fieldDF[f"{self.currentEnv}ParentCode"] == key
+                subFieldCodes = {
+                    field: code
+                    for field, code in zip(
+                        self.fieldDF.loc[codeFilt, "fieldName"].values, self.fieldDF.loc[codeFilt, self.currentEnv]
+                    )
+                }
+
+                attrsDict[key] = [
+                    {subFieldCodes[field.split("_")[1]]: data}
+                    for field, data in zip(subFieldData.keys(), subFieldData.values())
+                    if subFieldCodes.get(field.split("_")[1]) is not None
+                ]
+
+        print(attrsDict)
 
         if attrsDict:
 
@@ -1309,9 +1359,11 @@ class Integration(Settings):
 
         for env in envs:
 
+            self.currentEnv = env
+
             for reqVals in self.workflowListDetails:
 
-                initialDict = self.getResponse(env, reqVals["listExtension"], reqVals["params"])
+                initialDict = self.getResponse(reqVals["listExtension"], reqVals["params"])
                 shortTitleKey = reqVals["shortTitleKey"]
 
                 for cp in initialDict:
@@ -1355,6 +1407,8 @@ class Integration(Settings):
 
         for env in envs:
 
+            self.currentEnv = env
+
             for cp, shortTitle, title in zip(self.cpDF[env], self.cpDF["cpShortTitle"], self.cpDF["cpTitle"]):
 
                 if not pd.isna(cp):
@@ -1362,7 +1416,7 @@ class Integration(Settings):
                     if title != "N/A -- Group Workflow":
 
                         extension = self.cpWorkflowListExtension + self.cpWorkflowExtension.replace("_", f"{int(cp)}")
-                        workflow = self.getResponse(env, extension)
+                        workflow = self.getResponse(extension)
 
                         if len(workflow["workflows"]) != 0:
 
@@ -1376,7 +1430,7 @@ class Integration(Settings):
                         extension = self.groupWorkflowListExtension + self.groupWorkflowExtension.replace(
                             "_", f"{int(cp)}"
                         )
-                        workflow = self.getResponse(env, extension)
+                        workflow = self.getResponse(extension)
 
                         with open(f"./workflows/{env}/{shortTitle} Group Workflows.json", "w") as f:
                             json.dump(workflow, f, indent=2)
@@ -1413,7 +1467,9 @@ class Integration(Settings):
             envs = [envs.lower()]
 
         for env in envs:
-            initialDict = self.getResponse(env, self.formListExtension)
+
+            self.currentEnv = env
+            initialDict = self.getResponse(self.formListExtension)
 
             for form in initialDict:
 
@@ -1461,9 +1517,11 @@ class Integration(Settings):
 
         self.setFormDF()
 
-        universalColumns = ["formName", "isSubForm", "fieldName", "isSubField"] + [
-            env for env in self.authTokens.keys()
-        ]
+        universalColumns = (
+            ["formName", "isSubForm", "fieldName", "isSubField"]
+            + [env for env in self.authTokens.keys()]
+            + [f"{env}ParentCode" for env in self.authTokens.keys()]
+        )
         universalDF = pd.DataFrame(columns=universalColumns)
 
         if envs is None:
@@ -1474,51 +1532,27 @@ class Integration(Settings):
 
         for env in envs:
 
+            self.currentEnv = env
+
             for formName, val in zip(self.formDF["formName"], self.formDF[env]):
 
                 #  needed because nan in pandas is a float, so it's not sufficient to just convert to int -- throws error when trying to convert float nan
                 if not pd.isna(val):
 
                     extension = f"{self.formExtension}{int(val)}/true"
-                    fieldList = self.getResponse(env, extension)
+                    fieldList = self.getResponse(extension)
                     fieldList = fieldList["controlCollection"][:]
 
                     for fieldItem in fieldList:
 
                         isSubForm = fieldItem["type"] == "subForm"
 
-                        #  confirm both are present, but need to check that these are also in the same row
-                        if (formName in universalDF["formName"].values) and (
-                            fieldItem["caption"] in universalDF["fieldName"].values
-                        ):
+                        filt = (universalDF["formName"] == formName) & (
+                            universalDF["fieldName"] == fieldItem["caption"]
+                        )
 
-                            #  so we get all locations where that field appears, and the formName associated with those locations
-                            fieldInstances = universalDF.loc[
-                                universalDF.fieldName == fieldItem["caption"],
-                                "formName",
-                            ]
-
-                            #  turn them into a dict where the formName is the key and the index of that row is the value
-                            fieldInstances = dict(zip(fieldInstances.values, fieldInstances.index))
-
-                            #  if the formName of interest is in the dict, we are good to go -- recall we already filtered by fieldName to create fieldInstances
-                            if formName in fieldInstances.keys():
-
-                                #  so now we just grab the index of the field by referencing the specific form we want, since there can be multiple forms with the same field
-                                ind = fieldInstances[formName]
-                                universalDF.loc[ind, env] = fieldItem["controlName"]
-
-                            #  otherwise, make a new entry for that form and field -- this occurs when the form and field exist but the form of interest doesn't actually have that field
-                            else:
-
-                                data = {
-                                    "formName": formName,
-                                    "isSubForm": isSubForm,
-                                    "fieldName": fieldItem["caption"],
-                                    "isSubField": False,
-                                    env: fieldItem["controlName"],
-                                }
-                                universalDF = universalDF.append(data, ignore_index=True, sort=False)
+                        if not universalDF.loc[filt, env].empty:
+                            universalDF.loc[filt, env] = fieldItem["controlName"]
 
                         else:
 
@@ -1536,13 +1570,12 @@ class Integration(Settings):
 
                             for subFieldItem in subFieldList:
 
-                                if (formName in universalDF["formName"].values) and (
-                                    subFieldItem["caption"] in universalDF["fieldName"].values
-                                ):
+                                filt = (universalDF["formName"] == formName) & (
+                                    universalDF["fieldName"] == subFieldItem["caption"]
+                                )
 
-                                    filt = (universalDF["formName"] == formName) & (
-                                        universalDF["fieldName"] == subFieldItem["caption"]
-                                    )
+                                if not universalDF.loc[filt, env].empty:
+
                                     universalDF.loc[filt, env] = subFieldItem["controlName"]
 
                                 else:
@@ -1553,6 +1586,7 @@ class Integration(Settings):
                                         "fieldName": subFieldItem["caption"],
                                         "isSubField": True,
                                         env: subFieldItem["controlName"],
+                                        f"{env}ParentCode": fieldItem["controlName"],
                                     }
                                     universalDF = universalDF.append(data, ignore_index=True, sort=False)
 
@@ -1591,7 +1625,9 @@ class Integration(Settings):
 
         for env in envs:
 
-            initialDict = self.getResponse(env, self.dropdownExtension)
+            self.currentEnv = env
+
+            initialDict = self.getResponse(self.dropdownExtension)
 
             for dropdown in initialDict:
 
@@ -1633,6 +1669,8 @@ class Integration(Settings):
 
         for env in envs:
 
+            self.currentEnv = env
+
             for ddList in self.dropdownDF[env].values:
 
                 pvOutpath = f"./dropdowns/{ddList}.csv"
@@ -1648,7 +1686,6 @@ class Integration(Settings):
 
                 pvDF.set_index("permissibleValue", inplace=True)
                 initialDict = self.getResponse(
-                    env,
                     self.pvExtensionDetails["pvExtension"],
                     self.pvExtensionDetails["params"],
                 )
@@ -1703,10 +1740,12 @@ class Integration(Settings):
 
             for env in envs:
 
+                self.currentEnv = env
+
                 #  Allows sync of group and cp level workflows with the same function
                 for reqVals in self.workflowListDetails:
 
-                    initialDict = self.getResponse(env, reqVals["listExtension"], reqVals["params"])
+                    initialDict = self.getResponse(reqVals["listExtension"], reqVals["params"])
                     shortTitleKey = reqVals["shortTitleKey"]
                     shortTitles = [val[shortTitleKey] for val in initialDict]
 
@@ -1728,7 +1767,7 @@ class Integration(Settings):
                                     extension = self.cpWorkflowListExtension + self.cpWorkflowExtension.replace(
                                         "_", f"{cpID}"
                                     )
-                                    workflow = self.getResponse(env, extension)
+                                    workflow = self.getResponse(extension)
 
                                     if len(workflow["workflows"]) != 0:
 
@@ -1744,7 +1783,7 @@ class Integration(Settings):
                                     extension = self.groupWorkflowListExtension + self.groupWorkflowExtension.replace(
                                         "_", f"{cpID}"
                                     )
-                                    workflow = self.getResponse(env, extension)
+                                    workflow = self.getResponse(extension)
 
                                     with open(
                                         f"./workflows/{env}/{cp[shortTitleKey]} Group Workflows.json",
@@ -1760,7 +1799,7 @@ class Integration(Settings):
                                 extension = self.groupWorkflowListExtension + self.groupWorkflowExtension.replace(
                                     "_", f"{cpID}"
                                 )
-                                workflow = self.getResponse(env, extension)
+                                workflow = self.getResponse(extension)
 
                                 with open(
                                     f"./workflows/{env}/{cp[shortTitleKey]} Group Workflows.json",
@@ -1774,7 +1813,7 @@ class Integration(Settings):
                                 extension = self.cpWorkflowListExtension + self.cpWorkflowExtension.replace(
                                     "_", f"{cpID}"
                                 )
-                                workflow = self.getResponse(env, extension)
+                                workflow = self.getResponse(extension)
 
                                 if len(workflow["workflows"]) != 0:
 
@@ -1847,7 +1886,9 @@ class Integration(Settings):
 
             for env in envs:
 
-                initialDict = self.getResponse(env, self.formListExtension)
+                self.currentEnv = env
+
+                initialDict = self.getResponse(self.formListExtension)
                 forms = [form["caption"] for form in initialDict]
                 formIDs = []
 
@@ -1894,7 +1935,7 @@ class Integration(Settings):
                 for formID in formIDs:
 
                     extension = f"{self.formExtension}{int(formID)}/true"
-                    fieldList = self.getResponse(env, extension)
+                    fieldList = self.getResponse(extension)
                     fieldList = fieldList["controlCollection"][:]
 
                     filt = self.formDF[env] == formID
@@ -2030,12 +2071,13 @@ class Integration(Settings):
 
 
 integrate = Integration()
+# integrate.syncFormList()
 # integrate.syncFieldList()
 # integrate.updateForms()
 # integrate.syncAll()
 # integrate.updateAll(envs="dev")
 # integrate.syncDropdownList()
-integrate.syncDropdownPVs()
+# integrate.syncDropdownPVs()
 # integrate.prepForPost()
 # integrate.matchParticipants()
 # print(integrate.getTokens()["dev"])
@@ -2045,5 +2087,5 @@ integrate.syncDropdownPVs()
 # integrate.uploadSpecimens()
 # integrate.syncWorkflowList()
 # integrate.uploadParticipants()
-# integrate.universalUpload()
+integrate.universalUpload(matchPPID=True)
 # integrate.uploadArrays()
