@@ -118,9 +118,6 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.cleanDateForAPI(date)`
   - A generic function that cleans and formats dates to something the OpenSpecimen API will accept
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForAPI)`
-- `Integration.cleanVal(val)`
-  - A generic function that cleans and formats pandas data types to something the OpenSpecimen API will accept
-  - **val**: A piece of data. This is generally implied based on the column this function is applied to with `pd.apply(cleanVal)`
 - `Integration.matchParticipants(env, pmis=None, empi=None)`
   - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI, which are system-wide IDs
   - **env**: The environment this function is targeted at
