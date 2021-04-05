@@ -322,7 +322,7 @@ class Integration(Settings):
     def cleanDateForAPI(self, date, col):
 
         if pd.isna(date):
-            return None
+            return "null"
 
         #  this is intended to break off any times that might be included --> from [01/01/21 10:30] to [01/01/21]
         if " " in date:
@@ -603,7 +603,7 @@ class Integration(Settings):
             self.makeParticipants(matchPPID=matchPPID)
 
             # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
-            self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"])
+            self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"])
 
             #  getting all visit additional field form info and making a dict as above
             visitExtension = "/visits/extension-form"
@@ -614,7 +614,7 @@ class Integration(Settings):
 
             self.makeVisits()
 
-            self.specimenDF = universalDF.drop_duplicates(subset=["Specimen Label"])
+            self.specimenDF = universalDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"])
 
             #  getting all specimen additional field form info and making a dict as above
             specimenExtension = "/specimens/extension-form"
@@ -631,6 +631,9 @@ class Integration(Settings):
                 #  format to something OpS will accept
                 if "date" in col.lower():
                     self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForAPI, args=[col])
+
+                elif "time" in col.lower():
+                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForBulk)
 
             self.recursiveSpecimens()
 
@@ -888,6 +891,10 @@ class Integration(Settings):
                 #  format to something OpS will accept
                 if "date" in col.lower():
                     specimenDF[col] = specimenDF[col].apply(self.cleanDateForAPI, args=[col])
+
+                # required in the case that there are user defined forms/fields that take a date time -- behave more like a bulk upload than an API call and require specific formatting
+                elif "time" in col.lower():
+                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForBulk)
 
             self.specimenDF = specimenDF
 
@@ -1292,7 +1299,6 @@ class Integration(Settings):
         for key, val in zip(attrsDict.keys(), attrsDict.values()):
 
             if isinstance(val, dict):
-
                 attrsDict[key] = [subFields for subFields in attrsDict[key].values()]
 
         if attrsDict:
@@ -2084,5 +2090,5 @@ integrate = Integration()
 # integrate.uploadSpecimens()
 # integrate.syncWorkflowList()
 # integrate.uploadParticipants()
-integrate.universalUpload(matchPPID=True)
+# integrate.universalUpload()
 # integrate.uploadArrays()
