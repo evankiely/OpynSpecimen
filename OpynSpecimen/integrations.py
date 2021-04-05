@@ -82,16 +82,19 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def getResponse(self, extension, params=None):
+    def getResponse(self, extension, params=None, env=None):
 
-        if self.currentEnv == "prod":
+        if env is None:
+            env = self.currentEnv
+
+        if env == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", self.currentEnv)
+            url = self.baseURL.replace("_", env)
 
         url += extension
-        token = self.authTokens[self.currentEnv]
+        token = self.authTokens[env]
         headers = {"X-OS-API-TOKEN": token}
 
         if params is not None:
@@ -120,16 +123,19 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------  Maybe combine these response functions with the method kwarg determining function? maybe pull matchPPID into its own function?
 
-    def postResponse(self, extension, data, method="POST", matchPPID=False):
+    def postResponse(self, extension, data, method="POST", matchPPID=False, env=None):
 
-        if self.currentEnv == "prod":
+        if env is None:
+            env = self.currentEnv
+
+        if env == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", self.currentEnv)
+            url = self.baseURL.replace("_", env)
 
         url += extension
-        token = self.authTokens[self.currentEnv]
+        token = self.authTokens[env]
         headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
 
         obj = data
@@ -179,16 +185,19 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def postFile(self, extension, files):
+    def postFile(self, extension, files, env=None):
 
-        if self.currentEnv == "prod":
+        if env is None:
+            env = self.currentEnv
+
+        if env == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", self.currentEnv)
+            url = self.baseURL.replace("_", env)
 
         url += extension
-        token = self.authTokens[self.currentEnv]
+        token = self.authTokens[env]
         headers = {"X-OS-API-TOKEN": token}
         response = requests.request("POST", url, headers=headers, files=files)
 
@@ -1245,16 +1254,19 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def buildExtensionDetail(self, formExten, data):
+    def buildExtensionDetail(self, formExten, data, env=None):
         #  TODO: accomodate specimenEvents (these are env-wide; stainingEvent, qualityAssuranceAndControl, etc.) --> https://openspecimendev.winship.emory.edu/rest/ng/forms?formType=specimenEvent
+
+        if env is None:
+            env = self.currentEnv
 
         formId = formExten["formId"]
         formName = formExten["formName"]
         self.setFormDF()
 
         #  if there are none vals mixed in, we account for their under the hood float type, which forces ints to be represented as floats in the DF too
-        formFilt = (self.formDF[f"{self.currentEnv}ShortName"] == formName) & (
-            self.formDF[self.currentEnv].astype(int, errors="ignore") == formId
+        formFilt = (self.formDF[f"{env}ShortName"] == formName) & (
+            self.formDF[env].astype(int, errors="ignore") == formId
         )
         formName = self.formDF.loc[formFilt, "formName"].item()
 
@@ -1264,8 +1276,8 @@ class Integration(Settings):
 
         #  set the field DF and then establish filters
         self.setFieldDF()
-        fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[self.currentEnv] != pd.NA)
-        fieldDF = self.fieldDF.loc[fieldFilt, ["fieldName", self.currentEnv]]
+        fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[env] != pd.NA)
+        fieldDF = self.fieldDF.loc[fieldFilt, ["fieldName", env]]
 
         attrsDict = {}
 
@@ -1274,19 +1286,19 @@ class Integration(Settings):
             if len(ind.split("#")) < 4:
 
                 filt = fieldDF["fieldName"] == ind.split("#")[1]
-                keyVal = fieldDF.loc[filt, self.currentEnv].item()
+                keyVal = fieldDF.loc[filt, env].item()
                 attrsDict[keyVal] = data
 
             elif len(ind.split("#")) == 4:
 
                 filt = fieldDF["fieldName"] == ind.split("#")[1]
-                parentVal = fieldDF.loc[filt, self.currentEnv].item()
+                parentVal = fieldDF.loc[filt, env].item()
 
                 if attrsDict.get(parentVal) is None:
                     attrsDict[parentVal] = {}
 
                 filt = fieldDF["fieldName"] == ind.split("#")[3]
-                keyVal = fieldDF.loc[filt, self.currentEnv].item()
+                keyVal = fieldDF.loc[filt, env].item()
 
                 instanceKey = ind.split("#")[2]
 
