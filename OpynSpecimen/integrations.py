@@ -82,19 +82,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def getResponse(self, extension, params=None, env=None):
+    def getResponse(self, extension, params=None):
 
-        if env is None:
-            env = self.currentEnv
-
-        if env == "prod":
+        if self.currentEnv == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", env)
+            url = self.baseURL.replace("_", self.currentEnv)
 
         url += extension
-        token = self.authTokens[env]
+        token = self.authTokens[self.currentEnv]
         headers = {"X-OS-API-TOKEN": token}
 
         if params is not None:
@@ -123,19 +120,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------  Maybe combine these response functions with the method kwarg determining function? maybe pull matchPPID into its own function?
 
-    def postResponse(self, extension, data, method="POST", matchPPID=False, env=None):
+    def postResponse(self, extension, data, method="POST", matchPPID=False):
 
-        if env is None:
-            env = self.currentEnv
-
-        if env == "prod":
+        if self.currentEnv == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", env)
+            url = self.baseURL.replace("_", self.currentEnv)
 
         url += extension
-        token = self.authTokens[env]
+        token = self.authTokens[self.currentEnv]
         headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
 
         obj = data
@@ -185,19 +179,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def postFile(self, extension, files, env=None):
+    def postFile(self, extension, files):
 
-        if env is None:
-            env = self.currentEnv
-
-        if env == "prod":
+        if self.currentEnv == "prod":
             url = self.baseURL.replace("_", "")
 
         else:
-            url = self.baseURL.replace("_", env)
+            url = self.baseURL.replace("_", self.currentEnv)
 
         url += extension
-        token = self.authTokens[env]
+        token = self.authTokens[self.currentEnv]
         headers = {"X-OS-API-TOKEN": token}
         response = requests.request("POST", url, headers=headers, files=files)
 
@@ -1169,7 +1160,7 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def makeArray(self, forcePending):
+    def makeArray(self, forcePending=False):
 
         cols = self.coreDF.columns.values
 
@@ -1254,19 +1245,16 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def buildExtensionDetail(self, formExten, data, env=None):
+    def buildExtensionDetail(self, formExten, data):
         #  TODO: accomodate specimenEvents (these are env-wide; stainingEvent, qualityAssuranceAndControl, etc.) --> https://openspecimendev.winship.emory.edu/rest/ng/forms?formType=specimenEvent
-
-        if env is None:
-            env = self.currentEnv
 
         formId = formExten["formId"]
         formName = formExten["formName"]
         self.setFormDF()
 
         #  if there are none vals mixed in, we account for their under the hood float type, which forces ints to be represented as floats in the DF too
-        formFilt = (self.formDF[f"{env}ShortName"] == formName) & (
-            self.formDF[env].astype(int, errors="ignore") == formId
+        formFilt = (self.formDF[f"{self.currentEnv}ShortName"] == formName) & (
+            self.formDF[self.currentEnv].astype(int, errors="ignore") == formId
         )
         formName = self.formDF.loc[formFilt, "formName"].item()
 
@@ -1276,8 +1264,8 @@ class Integration(Settings):
 
         #  set the field DF and then establish filters
         self.setFieldDF()
-        fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[env] != pd.NA)
-        fieldDF = self.fieldDF.loc[fieldFilt, ["fieldName", env]]
+        fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[self.currentEnv] != pd.NA)
+        fieldDF = self.fieldDF.loc[fieldFilt, ["fieldName", self.currentEnv]]
 
         attrsDict = {}
 
@@ -1286,19 +1274,19 @@ class Integration(Settings):
             if len(ind.split("#")) < 4:
 
                 filt = fieldDF["fieldName"] == ind.split("#")[1]
-                keyVal = fieldDF.loc[filt, env].item()
+                keyVal = fieldDF.loc[filt, self.currentEnv].item()
                 attrsDict[keyVal] = data
 
             elif len(ind.split("#")) == 4:
 
                 filt = fieldDF["fieldName"] == ind.split("#")[1]
-                parentVal = fieldDF.loc[filt, env].item()
+                parentVal = fieldDF.loc[filt, self.currentEnv].item()
 
                 if attrsDict.get(parentVal) is None:
                     attrsDict[parentVal] = {}
 
                 filt = fieldDF["fieldName"] == ind.split("#")[3]
-                keyVal = fieldDF.loc[filt, env].item()
+                keyVal = fieldDF.loc[filt, self.currentEnv].item()
 
                 instanceKey = ind.split("#")[2]
 
@@ -1406,10 +1394,10 @@ class Integration(Settings):
                         }
                         cpDF = cpDF.append(data, ignore_index=True, sort=False)
 
+        cpDF.to_csv(self.cpOutPath, index=False)
+
         if wantDF:
             return cpDF
-
-        cpDF.to_csv(self.cpOutPath, index=False)
 
     #  ---------------------------------------------------------------------
     #  pulls down the workflows associated with the CPs in the dataframe generated by syncWorkflowList
@@ -1514,10 +1502,10 @@ class Integration(Settings):
                     }
                     formDF = formDF.append(data, ignore_index=True, sort=False)
 
+        formDF.to_csv(self.formOutPath, index=False)
+
         if wantDF:
             return formDF
-
-        formDF.to_csv(self.formOutPath, index=False)
 
     #  ---------------------------------------------------------------------
 
@@ -1605,10 +1593,10 @@ class Integration(Settings):
                                     }
                                     universalDF = universalDF.append(data, ignore_index=True, sort=False)
 
+        universalDF.to_csv(self.fieldOutPath, index=False)
+
         if wantDF:
             return universalDF
-
-        universalDF.to_csv(self.fieldOutPath, index=False)
 
     #  ---------------------------------------------------------------------
 
@@ -1665,10 +1653,10 @@ class Integration(Settings):
                         }
                         ddDF = ddDF.append(data, ignore_index=True, sort=False)
 
+        ddDF.to_csv(self.dropdownOutpath, index=False)
+
         if wantDF:
             return ddDF
-
-        ddDF.to_csv(self.dropdownOutpath, index=False)
 
     #  ---------------------------------------------------------------------
     #  pulls all the dropdown values associated with the dropdown lists in the dataframe generated by syncDropdownList
