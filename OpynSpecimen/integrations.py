@@ -11,6 +11,8 @@
 #  make use of the continue keyword
 #  use f strings with '' internal when wrapped with "" to avoid need to declare additional variables that then get passed in
 
+# NOTE: Maybe a good idea to have env=None as an option for submodules that otherwise use self.currentEnv now -- would allow users to access these and their own scripts/implimentations accessing these building block functions
+
 
 import os
 import json
@@ -1249,51 +1251,49 @@ class Integration(Settings):
         )
         formName = self.formDF.loc[formFilt, "formName"].item()
 
+        dropList = [val for val in data.index.to_list() if formName not in val]
+        cleanedData = data.drop(labels=dropList).copy()
+        cleanedData = cleanedData.dropna()
+
         #  set the field DF and then establish filters
         self.setFieldDF()
         fieldFilt = (self.fieldDF["formName"] == formName) & (self.fieldDF[self.currentEnv] != pd.NA)
+        fieldDF = self.fieldDF.loc[fieldFilt, ["fieldName", self.currentEnv]]
 
-        #  using a dictionary comprehension to build key value pairs of field name and the env specific code that is used to reference them
-        fieldDict = {
-            field: code
-            for field, code in zip(
-                self.fieldDF.loc[fieldFilt, "fieldName"],
-                self.fieldDF.loc[fieldFilt, self.currentEnv].astype(str),
-            )
-        }
+        attrsDict = {}
 
-        #  using a dictionary comprehension to build key value pairs of the env specific code that is used to reference specific fields, and the data that is to be associated with them
-        attrsDict = {
-            fieldDict[name.split("#")[1]]: data
-            for name, data in zip(data.index, data.values)
-            if name.split("#")[0] == formName and name.split("#")[1] in fieldDict.keys() and not pd.isna(data)
-        }
+        for ind, data in cleanedData.iteritems():
 
-        subFieldData = {
-            f"{name.split('#')[2]}_{name.split('#')[3]}": data
-            for name, data in zip(data.index, data.values)
-            if name.split("#")[0] == formName and len(name.split("#")) == 4 and not pd.isna(data)
-        }
+            if len(ind.split("#")) < 4:
 
-        for key in attrsDict.keys():
+                filt = fieldDF["fieldName"] == ind.split("#")[1]
+                keyVal = fieldDF.loc[filt, self.currentEnv].item()
+                attrsDict[keyVal] = data
 
-            if "SF" in key:
+            elif len(ind.split("#")) == 4:
 
-                codeFilt = self.fieldDF[f"{self.currentEnv}ParentCode"] == key
-                subFieldCodes = {
-                    field: code
-                    for field, code in zip(
-                        self.fieldDF.loc[codeFilt, "fieldName"].values, self.fieldDF.loc[codeFilt, self.currentEnv]
-                    )
-                }
+                filt = fieldDF["fieldName"] == ind.split("#")[1]
+                parentVal = fieldDF.loc[filt, self.currentEnv].item()
 
-                attrsDict[key] = [
-                    {subFieldCodes[field.split("_")[1]]: data}
-                    for field, data in zip(subFieldData.keys(), subFieldData.values())
-                    if subFieldCodes.get(field.split("_")[1]) is not None
-                ]
+                if attrsDict.get(parentVal) is None:
+                    attrsDict[parentVal] = {}
 
-        print(attrsDict)
+                filt = fieldDF["fieldName"] == ind.split("#")[3]
+                keyVal = fieldDF.loc[filt, self.currentEnv].item()
+
+                instanceKey = ind.split("#")[2]
+
+                if attrsDict[parentVal].get(instanceKey) is None:
+                    attrsDict[parentVal][instanceKey] = {keyVal: data}
+
+                elif attrsDict[parentVal][instanceKey].get(keyVal) is None:
+                    attrsDict[parentVal][instanceKey][keyVal] = data
+
+        for key, val in zip(attrsDict.keys(), attrsDict.values()):
+
+            if isinstance(val, dict):
+
+                attrsDict[key] = [subFields for subFields in attrsDict[key].values()]
 
         if attrsDict:
 
@@ -1517,11 +1517,9 @@ class Integration(Settings):
 
         self.setFormDF()
 
-        universalColumns = (
-            ["formName", "isSubForm", "fieldName", "isSubField"]
-            + [env for env in self.authTokens.keys()]
-            + [f"{env}ParentCode" for env in self.authTokens.keys()]
-        )
+        universalColumns = ["formName", "isSubForm", "fieldName", "isSubField"] + [
+            env for env in self.authTokens.keys()
+        ]
         universalDF = pd.DataFrame(columns=universalColumns)
 
         if envs is None:
@@ -1586,7 +1584,6 @@ class Integration(Settings):
                                         "fieldName": subFieldItem["caption"],
                                         "isSubField": True,
                                         env: subFieldItem["controlName"],
-                                        f"{env}ParentCode": fieldItem["controlName"],
                                     }
                                     universalDF = universalDF.append(data, ignore_index=True, sort=False)
 
