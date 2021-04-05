@@ -91,21 +91,18 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.syncAll(envs=None)`
   - Calls the following functions in order: syncWorkflowList, syncWorkflows, syncFormList, syncFieldList, syncDropdownList, syncDropdownPVs
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
-- `Integration.getResponse(env, extension, params=None)`
+- `Integration.getResponse(extension, params=None)`
   - A generic GET request
-  - **env**: The environment this request is targeted at
   - **extension**: The extension to be appended to the default URL
   - **params**: A dictionary of any parameters the GET request may allow/require
-- `Integration.postResponse(env, extension, data, method="POST", matchPPID=False)`
+- `Integration.postResponse(extension, data, method="POST", matchPPID=False)`
   - A generic request, able to accept various methods, but designed for `"PUT"` and `"POST"`
-  - **env**: The environment this request is targeted at
   - **extension**: The extension to be appended to the default URL
   - **data**: A dictionary of any data the request may allow/require
   - **method**: The type of request; currently tested with `"PUT"` and `"POST"`
   - **matchPPID**: Used when uploading participants; if `True`, will match existing participants in a Collection Protocol to those being uploaded based on PPID and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
-- `Integration.postFile(env, extension, files)`
+- `Integration.postFile(extension, files)`
   - A generic function used to upload files via the OpenSpecimen API
-  - **env**: The environment this upload is targeted at
   - **extension**: The extension to be appended to the default URL
   - **files**: The file or files to be uploaded
 - `Integration.genericBulkUpload(importType="CREATE", checkStatus=False)`
@@ -115,103 +112,93 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.cleanDateForBulk(date)`
   - A generic function that cleans and formats dates to something the OpenSpecimen bulk upload function will accept
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForBulk)`
-- `Integration.cleanDateForAPI(date)`
+- `Integration.cleanDateForAPI(date, col)`
   - A generic function that cleans and formats dates to something the OpenSpecimen API will accept
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForAPI)`
-- `Integration.matchParticipants(env, pmis=None, empi=None)`
+  - **col**: The header of the column being acted upon. As above, this is used in the context of `pd.apply()` as in `pd.apply(cleanDateForAPI, args=[col])`
+- `Integration.matchParticipants(pmis=None, empi=None)`
   - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI, which are system-wide IDs
-  - **env**: The environment this function is targeted at
   - **pmis**: A dictionary structured like `{"siteName": mrnSite, "mrn": mrnVal}`
   - **empi**: The participant's empi as a string or integer
-- `Integration.makeParticipants(env, matchPPID=False)`
+- `Integration.makeParticipants(matchPPID=False)`
   - Creates the Participant object, populates it with data, and passes it to be uploaded
-  - **env**: The environment this function is targeted at
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
-- `Integration.universalUpload()`
+- `Integration.universalUpload(matchPPID=False)`
   - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
-- `Integration.matchVisit(env, visitName)`
+  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+- `Integration.matchVisit(visitName)`
   - Matches visits against those that already exist in a given environment, based on that visit's name
-  - **env**: The environment this function is targeted at
   - **visitName**: The name of the visit to be matched. Will match only exact, but will match the first instance of that name, so must be unique within an given Collection Protocol
-- `Integration.makeVisits(env, universal=False)`
+- `Integration.makeVisits()`
   - Creates the Visit object, populates it with data, and passes it to be uploaded
-  - **env**: The environment this function is targeted at
-  - **universal**: Set `True` to indicate this visit is part of a "Universal" upload; changes a couple column headers the function looks for when pulling info
 - `Integration.uploadVisits()`
   - The function that is called to begin the visit upload process. Looks for a document named in the following format: "visits_[envCode]_miscOtherInfo.csv"
-- `Integration.recursiveSpecimens(env, parentSpecimen=None)`
+- `Integration.recursiveSpecimens(parentSpecimen=None)`
   - A depth-first approach to specimen creation
-  - **env**: The environment this function is targeted at
   - **parentSpecimen**: Parent specimen information to allow for the child specimen to easily match where to be uploaded and, eventually, fill missing information from the parent as needed
 - `Integration.uploadSpecimens()`
   - The function that is called to begin the specimen upload process. Looks for a document named in the following format: "specimens_[envCode]_miscOtherInfo.csv"
-- `Integration.makeSpecimen(env, data, referenceSpec={})`
+- `Integration.makeSpecimen(data, referenceSpec={})`
   - Creates the Specimen object, populates it with data, and passes it to be uploaded
-  - **env**: The environment this function is targeted at
   - **data**: The data used to create the Specimen object
   - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
-- `Integration.makeAliquot(env, data, referenceSpec={})`
+- `Integration.makeAliquot(data, referenceSpec={})`
   - Creates the Aliquot object, populates it with data, and passes it to be uploaded
-  - **env**: The environment this function is targeted at
   - **data**: The data used to create the Aliquot object
   - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
-- `Integration.matchArray(env, arrayName)`
+- `Integration.matchArray(arrayName)`
   - Matches arrays against those that already exist in a given environment, based on that array's name
-  - **env**: The environment this function is targeted at
   - **arrayName**: The name of the array to be matched. Will match only exact, but will match the first instance of that name, so must be unique within OpenSpecimen
-- `Integration.populateArray(env, arrayDetails={})`
+- `Integration.populateArray(arrayDetails={})`
   - Creates the Core object, populates it with data, and passes it to be uploaded
-  - **env**: The environment this function is targeted at
   - **arrayDetails**: A dictionary structured like `{"name": arrayName, "id": arrayId}`
-- `Integration.makeArray(env, forcePending)`
+- `Integration.makeArray(forcePending=False)`
   - Creates the Array object, populates it with data, and passes it to be uploaded
-  - **env**: The environment this function is targeted at
   - **forcePending**: Whether or not to set arrays to pending status before attempting to create/update them. Use this if the array might already exist and could be marked as completed. Always sets the array status to completed after populating with specimens
 - `Integration.uploadArrays(forcePending=False)`
   - The function that is called to begin the array upload process. Looks for a document named in the following format: "arrays_[envCode]_miscOtherInfo.csv"
   - **forcePending**: Whether or not to set arrays to pending status before attempting to create/update them. Use this if the array might already exist and could be marked as completed. Always sets the array status to completed after populating with specimens
-- `Integration.buildExtensionDetail(env, formExten, data)`
+- `Integration.buildExtensionDetail(formExten, data)`
   - Creates the Extension object, populates it with data, and passes it to be uploaded. Extension Details are things like Participant/Visit/Specimen Additional Fields, and Event Fields
-  - **env**: The environment this function is targeted at
   - **formExten**: A dictionary structured like `{"formId": formId, "formName": formName}`
   - **data**: The data used to create the Extension object
 - `Integration.validateInputFiles(keyword)`
   - Pulls file paths for all the files in the Input folder which contain a given keyword
   - **keyword**: The search term
 - `Integration.setCPDF(envs=None)`
-  - Sets the Collection Protocol Dataframe if the .csv exists, or builds a new copy by calling syncWorkflowList. Since it sets `wantDF=True` when calling syncWorkflowList the .csv copy of the Collection Protocol Dataframe is not updated when this is invoked
+  - Sets the Collection Protocol Dataframe if the .csv exists, or builds a new copy by calling `syncWorkflowList(wantDF=True)`
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
 - `Integration.syncWorkflowList(envs=None, wantDF=False)`
   - Creates a new Dataframe of Collection Protocols which are available in the provided environment(s), as well as their internal reference codes
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
-  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe
 - `Integration.syncWorkflows(envs=None)`
   - Pulls down copies of the Workflows for all Collection Protocols in the Collection Protocol Dataframe, generated by generated by syncWorkflowList, as long as those Workflows are not empty
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
 - `Integration.setFormDF(envs=None)`
-  - Sets the Form Dataframe if the .csv exists, or builds a new copy by calling syncFormList. Since it sets `wantDF=True` when calling syncFormList the .csv copy of the Form Dataframe is not updated when this is invoked
+  - Sets the Form Dataframe if the .csv exists, or builds a new copy by calling syncFormList
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
 - `Integration.syncFormList(envs=None, wantDF=False)`
   - Creates a new Dataframe of Forms which are available in the provided environment(s), as well as their internal reference codes and when they were last modified/updated
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
-  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe.
 - `Integration.setFieldDF(envs=None)`
-  - Sets the Field Dataframe if the .csv exists, or builds a new copy by calling syncFieldList. Since it sets `wantDF=True` when calling syncFieldList the .csv copy of the Field Dataframe is not updated when this is invoked
+  - Sets the Field Dataframe if the .csv exists, or builds a new copy by calling syncFieldList.
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
 - `Integration.syncFieldList(envs=None, wantDF=False)`
   - Creates a new Dataframe of Fields and Subfields, as well as their internal reference codes, which are available in the provided environment(s), given that environment's forms, which are given in the Dataframe generated by syncFormList
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
-  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe
 - `Integration.setDropdownDF(envs=None)`
-  - Sets the Dropdowns Dataframe if the .csv exists, or builds a new copy by calling syncDropdownList. Since it sets `wantDF=True` when calling syncDropdownList the .csv copy of the Dropdowns Dataframe is not updated when this is invoked
+  - Sets the Dropdowns Dataframe if the .csv exists, or builds a new copy by calling syncDropdownList.
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
 - `Integration.syncDropdownList(envs=None, wantDF=False)`
   - Creates a new Dataframe of Dropdowns which are available in the provided environment(s), and their environment specific names
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
-  - **wantDF**: Indicates if the user wants the function to return the new Dataframe. If so, the Dataframe is returned before the call to write to .csv is invoked, and the .csv is not updated
+  - **wantDF**: Indicates if the user wants the function to return the new Dataframe
 - `Integration.syncDropdownPVs(envs=None)`
   - Creates a new Dataframe of Permissible Values which are available in the provided environment(s), given that environment's dropdowns Dataframe, generated by syncDropdownList
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
