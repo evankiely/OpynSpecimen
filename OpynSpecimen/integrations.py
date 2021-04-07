@@ -11,8 +11,6 @@
 #  make use of the continue keyword
 #  use f strings with '' internal when wrapped with "" to avoid need to declare additional variables that then get passed in
 
-# NOTE: Maybe a good idea to have env=None as an option for submodules that otherwise use self.currentEnv now -- would allow users to access these and their own scripts/implimentations accessing these building block functions
-
 
 import os
 import json
@@ -206,11 +204,9 @@ class Integration(Settings):
     #  TESTED WITH ONLY SMALL SAMPLE OF SPECIMENS AS OF 3/11 -- should enable standard bulk uploads as per the gui
     def genericBulkUpload(self, importType="CREATE", checkStatus=False):
 
-        self.inputItems = [
-            item for item in os.listdir(self.uploadInputDir) if item.split("_")[0].lower() == "genericbulk"
-        ]
+        inputItems = [item for item in os.listdir(self.uploadInputDir) if item.split("_")[0].lower() == "genericbulk"]
 
-        for item in self.inputItems:
+        for item in inputItems:
 
             if not item.endswith(".csv"):
                 raise TypeError("Input files must be of type .CSV")
@@ -355,6 +351,12 @@ class Integration(Settings):
                 return timestamp
 
             return date
+
+    #  ---------------------------------------------------------------------
+
+    def validateData(self, template):
+
+        pass
 
     #  ---------------------------------------------------------------------
     #  uses system-wide ids to match an existing participant profile
@@ -541,9 +543,8 @@ class Integration(Settings):
             }
 
             #  getting all visit additional field form info and making a dict as above
-            participantExtension = "/participants/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(participantExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -594,9 +595,8 @@ class Integration(Settings):
             )
 
             #  getting all visit additional field form info and making a dict as above
-            participantExtension = "/participants/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(participantExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -606,9 +606,8 @@ class Integration(Settings):
             self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"])
 
             #  getting all visit additional field form info and making a dict as above
-            visitExtension = "/visits/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(visitExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -617,9 +616,8 @@ class Integration(Settings):
             self.specimenDF = universalDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"])
 
             #  getting all specimen additional field form info and making a dict as above
-            specimenExtension = "/specimens/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(specimenExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -645,9 +643,8 @@ class Integration(Settings):
 
     def matchVisit(self, visitName):
 
-        visitExten = "visits/bynamespr"
         params = {"visitName": visitName, "exactMatch": True}
-        visitId = self.getResponse(visitExten, params=params)
+        visitId = self.getResponse(self.matchVisitExtension, params=params)
 
         if visitId:
 
@@ -671,7 +668,6 @@ class Integration(Settings):
 
         for ind, data in tqdm(self.visitDF.iterrows(), desc="Visit Uploads", unit=" Visits"):
 
-            extension = "visits/"
             formExten = self.formExtensions[data["CP Short Title"]]
 
             if formExten:
@@ -731,7 +727,7 @@ class Integration(Settings):
 
             if visit.code:
 
-                extension += str(visit.code)
+                extension = self.visitExtension.replace("_", str(visit.code))
                 self.postResponse(extension, visit, method="PUT")
 
             else:
@@ -757,9 +753,8 @@ class Integration(Settings):
             }
 
             #  getting all visit additional field form info and making a dict as above
-            visitExtension = "/visits/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(visitExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -799,7 +794,7 @@ class Integration(Settings):
                 if not pd.isna(data["Specimen Label"]) or data["Lineage"].lower() == "aliquot":
 
                     specimenLabel = data["Specimen Label"]
-                    extension = "specimens/"
+                    extension = self.specimenExtension
                     params = {"label": specimenLabel, "exactMatch": True}
                     matchedSpecimen = self.getResponse(extension, params=params)
 
@@ -815,7 +810,7 @@ class Integration(Settings):
 
                         else:
 
-                            extension = "specimens/collect"
+                            extension = self.aliquotExtension
                             ref = {"Matched": matchedSpecimen}
                             specimen = self.makeAliquot(data, referenceSpec=ref)
 
@@ -831,7 +826,7 @@ class Integration(Settings):
 
                         else:
 
-                            extension = "specimens/collect"
+                            extension = self.aliquotExtension
                             ref = {"Parent": parentSpecimen}
                             specimen = self.makeAliquot(data, referenceSpec=ref)
 
@@ -845,7 +840,7 @@ class Integration(Settings):
 
                         else:
 
-                            extension = "specimens/collect"
+                            extension = self.aliquotExtension
                             specimen = self.makeAliquot(data)
 
                         response = self.postResponse(extension, specimen)
@@ -867,21 +862,20 @@ class Integration(Settings):
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
             self.currentEnv = env
-            specimenDF = pd.read_csv(item, dtype=str)
-            cols = specimenDF.columns.values
+            self.specimenDF = pd.read_csv(item, dtype=str)
+            cols = self.specimenDF.columns.values
             self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
-            cpIDs = specimenDF["CP Short Title"].unique()
+            cpIDs = self.specimenDF["CP Short Title"].unique()
             cpIDs = {
                 cpShortTitle: int(self.cpDF.loc[(self.cpDF["cpShortTitle"] == cpShortTitle), env])
                 for cpShortTitle in cpIDs
             }
 
             #  getting all specimen additional field form info and making a dict as above
-            specimenExtension = "/specimens/extension-form"
             self.formExtensions = {
-                cpShortTitle: self.getResponse(specimenExtension, params={"cpId": cpId})
+                cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
@@ -890,13 +884,11 @@ class Integration(Settings):
 
                 #  format to something OpS will accept
                 if "date" in col.lower():
-                    specimenDF[col] = specimenDF[col].apply(self.cleanDateForAPI, args=[col])
+                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForAPI, args=[col])
 
                 # required in the case that there are user defined forms/fields that take a date time -- behave more like a bulk upload than an API call and require specific formatting
                 elif "time" in col.lower():
                     self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForBulk)
-
-            self.specimenDF = specimenDF
 
             self.recursiveSpecimens()
 
@@ -921,14 +913,20 @@ class Integration(Settings):
 
         specimenClass, specimenType = data.get("Class"), data.get("Type")
         anatomicSite, pathology = data.get("Anatomic Site"), data.get("Pathological Status")
-        initialQty, availableQty = data.get("Initial Quantity"), data.get("Available Quantity")
         laterality, collectionStatus = data.get("Laterality"), data.get("Collection Status")
         concentration, label = data.get("Concentration"), data["Specimen Label"]
         comments = data.get("Comments")
 
+        initialQty = data.get("Initial Quantity")
+        availableQty = data.get("Available Quantity")
+
         biohazards = [data.get(col) for col in cols if "biohazard" in col.lower() and data.get(col) is not None]
 
         if self.isUniversal:
+
+            # initialQty = data.get("Quantity")
+            # availableQty = data.get("Quantity")
+
             storageLocation = {
                 "name": data.get("Container"),
                 "positionX": data.get("Row"),
@@ -936,6 +934,10 @@ class Integration(Settings):
             }
 
         else:
+
+            # initialQty = data.get("Initial Quantity")
+            # availableQty = data.get("Available Quantity")
+
             storageLocation = {
                 "name": data.get("Location#Container"),
                 "positionX": data.get("Location#Row"),
@@ -1117,9 +1119,8 @@ class Integration(Settings):
 
     def matchArray(self, arrayName):
 
-        arrayExten = "specimen-arrays/"
         params = {"name": arrayName, "exactMatch": True}
-        arrayInfo = self.getResponse(arrayExten, params=params)
+        arrayInfo = self.getResponse(self.arrayExtension, params=params)
 
         if arrayInfo:
 
@@ -1133,7 +1134,7 @@ class Integration(Settings):
 
     def populateArray(self, arrayDetails={}):
 
-        extension = f"specimen-arrays/{arrayDetails['id']}/cores"
+        extension = self.coreExtension.replace("_", str(arrayDetails["id"]))
         cols = self.coreDF.columns.values
         cores = Cores()
 
@@ -1174,7 +1175,7 @@ class Integration(Settings):
 
         for ind, data in tqdm(self.arrayDF.iterrows(), desc="Array Uploads", unit=" Arrays"):
 
-            extension = "specimen-arrays/"
+            extension = self.arrayExtension
             setComplete = False
 
             data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
@@ -1421,7 +1422,8 @@ class Integration(Settings):
 
                     if title != "N/A -- Group Workflow":
 
-                        extension = self.cpWorkflowListExtension + self.cpWorkflowExtension.replace("_", f"{int(cp)}")
+                        extension = self.cpWorkflowExtension.replace("_", f"{int(cp)}")
+
                         workflow = self.getResponse(extension)
 
                         if len(workflow["workflows"]) != 0:
@@ -1433,9 +1435,8 @@ class Integration(Settings):
                                 json.dump(writable, f, indent=2)
                     else:
 
-                        extension = self.groupWorkflowListExtension + self.groupWorkflowExtension.replace(
-                            "_", f"{int(cp)}"
-                        )
+                        extension = self.groupWorkflowExtension.replace("_", f"{int(cp)}")
+
                         workflow = self.getResponse(extension)
 
                         with open(f"./workflows/{env}/{shortTitle} Group Workflows.json", "w") as f:
@@ -1741,81 +1742,31 @@ class Integration(Settings):
         elif not isinstance(envs, list):
             envs = [envs.lower()]
 
-            for env in envs:
+        for env in envs:
 
-                self.currentEnv = env
+            self.currentEnv = env
 
-                #  Allows sync of group and cp level workflows with the same function
-                for reqVals in self.workflowListDetails:
+            #  Allows sync of group and cp level workflows with the same function
+            for reqVals in self.workflowListDetails:
 
-                    initialDict = self.getResponse(reqVals["listExtension"], reqVals["params"])
-                    shortTitleKey = reqVals["shortTitleKey"]
-                    shortTitles = [val[shortTitleKey] for val in initialDict]
+                initialDict = self.getResponse(reqVals["listExtension"], reqVals["params"])
+                shortTitleKey = reqVals["shortTitleKey"]
+                shortTitles = [val[shortTitleKey] for val in initialDict]
 
-                    for cp in initialDict:
+                for cp in initialDict:
 
-                        cpID = cp["id"]
+                    cpID = cp["id"]
 
-                        if cp[shortTitleKey] in self.cpDF["cpShortTitle"].values:
-                            filt = self.cpDF["cpShortTitle"] == cp[shortTitleKey]
+                    if cp[shortTitleKey] in self.cpDF["cpShortTitle"].values:
+                        filt = self.cpDF["cpShortTitle"] == cp[shortTitleKey]
 
-                            if (
-                                not pd.isna(self.cpDF.loc[filt, env].item())
-                                and self.cpDF.loc[filt, env].item() != cpID
-                            ):
-                                self.cpDF.loc[filt, env] = cpID
+                        if pd.isna(self.cpDF.loc[filt, env].item()) or self.cpDF.loc[filt, env].item() != cpID:
+                            self.cpDF.loc[filt, env] = cpID
 
-                                if shortTitleKey != "name":
+                            if shortTitleKey != "name":
 
-                                    extension = self.cpWorkflowListExtension + self.cpWorkflowExtension.replace(
-                                        "_", f"{cpID}"
-                                    )
-                                    workflow = self.getResponse(extension)
+                                extension = self.cpWorkflowExtension.replace("_", str(cpID))
 
-                                    if len(workflow["workflows"]) != 0:
-
-                                        #  removing / because it can interfere with file pathing on save
-                                        shortTitle = cp[shortTitleKey].replace("/", "_")
-                                        writable = [section for section in workflow["workflows"].values()]
-
-                                        with open(f"./workflows/{env}/{shortTitle}.json", "w") as f:
-                                            json.dump(writable, f, indent=2)
-
-                                else:
-
-                                    extension = self.groupWorkflowListExtension + self.groupWorkflowExtension.replace(
-                                        "_", f"{cpID}"
-                                    )
-                                    workflow = self.getResponse(extension)
-
-                                    with open(
-                                        f"./workflows/{env}/{cp[shortTitleKey]} Group Workflows.json",
-                                        "w",
-                                    ) as f:
-                                        json.dump(workflow, f, indent=2)
-
-                        else:
-
-                            if shortTitleKey == "name":
-
-                                cpTitle = "N/A -- Group Workflow"
-                                extension = self.groupWorkflowListExtension + self.groupWorkflowExtension.replace(
-                                    "_", f"{cpID}"
-                                )
-                                workflow = self.getResponse(extension)
-
-                                with open(
-                                    f"./workflows/{env}/{cp[shortTitleKey]} Group Workflows.json",
-                                    "w",
-                                ) as f:
-                                    json.dump(workflow, f, indent=2)
-
-                            else:
-
-                                cpTitle = cp["title"]
-                                extension = self.cpWorkflowListExtension + self.cpWorkflowExtension.replace(
-                                    "_", f"{cpID}"
-                                )
                                 workflow = self.getResponse(extension)
 
                                 if len(workflow["workflows"]) != 0:
@@ -1827,42 +1778,85 @@ class Integration(Settings):
                                     with open(f"./workflows/{env}/{shortTitle}.json", "w") as f:
                                         json.dump(writable, f, indent=2)
 
-                            data = {
-                                "cpShortTitle": cp[shortTitleKey],
-                                "cpTitle": cpTitle,
-                                env: cpID,
-                            }
-                            self.cpDF = self.cpDF.append(data, ignore_index=True, sort=False)
+                            else:
 
-                    for cpShortTitle, cpTitle in zip(self.cpDF["cpShortTitle"], self.cpDF["cpTitle"]):
+                                extension = self.groupWorkflowExtension.replace("_", str(cpID))
 
-                        filt = self.cpDF["cpShortTitle"] == cpShortTitle
+                                workflow = self.getResponse(extension)
 
-                        #  Important -- don't want to delete a normal CP workflow because you're looking at group workflows
-                        if shortTitleKey != "name" and cpTitle != "N/A -- Group Workflow":
+                                with open(
+                                    f"./workflows/{env}/{cp[shortTitleKey]} Group Workflows.json",
+                                    "w",
+                                ) as f:
+                                    json.dump(workflow, f, indent=2)
 
-                            #  If the short title from the DF is not in the list, and there is a non-None val for the code
-                            if cpShortTitle not in shortTitles and not pd.isna(self.cpDF.loc[filt, env].item()):
+                    else:
 
-                                self.cpDF.loc[filt, env] = None
-                                workflowLocation = f"./workflows/{env}/{cpShortTitle}.json"
+                        if shortTitleKey == "name":
 
-                                if os.path.exists(workflowLocation):
-                                    os.remove(workflowLocation)
+                            cpTitle = "N/A -- Group Workflow"
+                            extension = self.groupWorkflowExtension.replace("_", str(cpID))
 
-                        elif shortTitleKey == "name" and cpTitle == "N/A -- Group Workflow":
+                            workflow = self.getResponse(extension)
 
-                            if cpShortTitle not in shortTitles and not pd.isna(self.cpDF.loc[filt, env].item()):
+                            with open(
+                                f"./workflows/{env}/{cp[shortTitleKey]} Group Workflows.json",
+                                "w",
+                            ) as f:
+                                json.dump(workflow, f, indent=2)
 
-                                self.cpDF.loc[filt, env] = None
-                                workflowLocation = f"./workflows/{env}/{cpShortTitle}.json"
+                        else:
 
-                                if os.path.exists(workflowLocation):
-                                    os.remove(workflowLocation)
+                            cpTitle = cp["title"]
+                            extension = self.cpWorkflowExtension.replace("_", str(cpID))
+
+                            workflow = self.getResponse(extension)
+
+                            if len(workflow["workflows"]) != 0:
+
+                                #  removing / because it can interfere with file pathing on save
+                                shortTitle = cp[shortTitleKey].replace("/", "_")
+                                writable = [section for section in workflow["workflows"].values()]
+
+                                with open(f"./workflows/{env}/{shortTitle}.json", "w") as f:
+                                    json.dump(writable, f, indent=2)
+
+                        data = {
+                            "cpShortTitle": cp[shortTitleKey],
+                            "cpTitle": cpTitle,
+                            env: cpID,
+                        }
+                        self.cpDF = self.cpDF.append(data, ignore_index=True, sort=False)
+
+                for cpShortTitle, cpTitle in zip(self.cpDF["cpShortTitle"], self.cpDF["cpTitle"]):
+
+                    filt = self.cpDF["cpShortTitle"] == cpShortTitle
+
+                    #  Important -- don't want to delete a normal CP workflow because you're looking at group workflows
+                    if shortTitleKey != "name" and cpTitle != "N/A -- Group Workflow":
+
+                        #  If the short title from the DF is not in the list, and there is a non-None val for the code
+                        if cpShortTitle not in shortTitles and not pd.isna(self.cpDF.loc[filt, env].item()):
+
+                            self.cpDF.loc[filt, env] = None
+                            workflowLocation = f"./workflows/{env}/{cpShortTitle}.json"
+
+                            if os.path.exists(workflowLocation):
+                                os.remove(workflowLocation)
+
+                    elif shortTitleKey == "name" and cpTitle == "N/A -- Group Workflow":
+
+                        if cpShortTitle not in shortTitles and not pd.isna(self.cpDF.loc[filt, env].item()):
+
+                            self.cpDF.loc[filt, env] = None
+                            workflowLocation = f"./workflows/{env}/{cpShortTitle}.json"
+
+                            if os.path.exists(workflowLocation):
+                                os.remove(workflowLocation)
 
             #  Removing all rows that have None vals for all Envs (i.e. don't exist anywhere)
-            self.cpDF.dropna(how="all", subset=[env for env in self.envs.keys()], inplace=True)
-            self.cpDF.to_csv(self.cpOutPath, index=False)
+        self.cpDF.dropna(how="all", subset=[env for env in self.envs.keys()], inplace=True)
+        self.cpDF.to_csv(self.cpOutPath, index=False)
 
     #  ---------------------------------------------------------------------
     #  updates forms and fields, including removing any that are no longer in use
@@ -2092,3 +2086,5 @@ integrate = Integration()
 # integrate.uploadParticipants()
 # integrate.universalUpload()
 # integrate.uploadArrays()
+# integrate.syncWorkflows()
+integrate.updateWorkflows()
