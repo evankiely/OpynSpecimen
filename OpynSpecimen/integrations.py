@@ -10,11 +10,12 @@
 #  review use of "is" vs. == -- recall that is points to an object in memory whereas == is a value equivalence check
 #  make use of the continue keyword
 #  use f strings with '' internal when wrapped with "" to avoid need to declare additional variables that then get passed in
-
+#  NOTE: Use this for blank dates, etc. that shouldn't default to today or some other value --> ##set_to_blank##
 
 import os
 import json
 import time
+import pytz
 import shutil
 from datetime import datetime, timezone
 
@@ -314,45 +315,6 @@ class Integration(Settings):
         return date
 
     #  ---------------------------------------------------------------------
-    #  converting dates to OpS acceptable format -- UPDATE: use regex to pattern match and be more flexible in the format that can be accepted?
-    def cleanDateForAPI(self, date, col):
-
-        if pd.isna(date):
-            return "null"
-
-        #  this is intended to break off any times that might be included --> from [01/01/21 10:30] to [01/01/21]
-        if " " in date:
-            date = date.split(" ")[0]
-
-        if "/" in date:
-            date = date.split("/")
-
-            if len(date[0]) == 1:
-                date[0] = "0" + date[0]
-
-            if len(date[1]) == 1:
-                date[1] = "0" + date[1]
-
-            if len(date[2]) == 2:
-                raise ValueError(
-                    "Looks like there is an issue with date formatting. Perhaps your years are abbreviated?"
-                )
-
-            date = "-".join([date[2], date[0], date[1]])
-
-            if "birth" not in col.lower() and "death" not in col.lower():
-                # 4 digit year-2 digit month-2 digit day hour(non-24):minute am/pm val --> see https://docs.python.org/3/library/time.html#time.strftime
-                dt = datetime.strptime(f"{date} 12:00pm", "%Y-%m-%d %I:%M%p").astimezone()
-                timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
-                # OpenSpecimen converts to timezone on the server, so will subtract 4/5 hours for est (relative to utc)
-                # if you don't specify a time, it assumes midnight that day, which is then converted to est, pushing the date back to the day before
-                # so we put the time as noon always, or 11:59, or if it has a timestamp, maybe add 4 or 5 hours? this gets to be a lot...
-
-                return timestamp
-
-            return date
-
-    #  ---------------------------------------------------------------------
 
     def validateData(self, template):
 
@@ -397,11 +359,6 @@ class Integration(Settings):
 
         cols = self.participantDF.columns.values
 
-        for col in cols:
-            #  format to something OpS will accept
-            if "date" in col.lower():
-                self.participantDF[col] = self.participantDF[col].apply(self.cleanDateForAPI, args=[col])
-
         for ind, data in tqdm(self.participantDF.iterrows(), desc="Participant Uploads", unit=" Participants"):
 
             extension = self.registerParticipantExtension
@@ -419,8 +376,16 @@ class Integration(Settings):
             data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
 
             #  putting mrn sites and vals into lists
-            siteNames = [data[site] for site in data.keys() if "#site" in site.lower() and "pmi#" in site.lower()]
-            mrnVals = [data[mrnVal] for mrnVal in data.keys() if "#mrn" in mrnVal.lower() and "pmi#" in mrnVal.lower()]
+            siteNames = [
+                data[site]
+                for site in data.keys()
+                if "#site" in site.lower() and "pmi#" in site.lower() and site is not None
+            ]
+            mrnVals = [
+                data[mrnVal]
+                for mrnVal in data.keys()
+                if "#mrn" in mrnVal.lower() and "pmi#" in mrnVal.lower() and mrnVal is not None
+            ]
 
             #  making individual dicts for each mrn site and corresponding val
             pmis = [
@@ -531,6 +496,12 @@ class Integration(Settings):
             self.currentEnv = env
 
             self.participantDF = pd.read_csv(item)
+
+            cols = self.participantDF.columns.values
+
+            for col in cols:
+                self.participantDF[col] = self.participantDF[col].apply(self.convertUTC, args=[col])
+
             self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
@@ -554,6 +525,44 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
+    def convertUTC(self, data, col):
+
+        if data != "nan":
+
+            if "birth" in col.lower() or "death" in col.lower():
+
+                data = data.split(" ")[0].split("/")
+                data = "-".join([data[2], data[0], data[1]])
+
+                return data
+
+            else:
+
+                dtVals = ["date", "time", "created"]
+                isDTCol = [(True if val in col.lower() else False) for val in dtVals]
+
+                if True in isDTCol:
+
+                    try:
+                        dt = datetime.strptime(data, "%m/%d/%Y %H:%M:%S")
+
+                    except:
+                        dt = datetime.strptime(data, "%m/%d/%Y")
+
+                    tz = pytz.timezone("America/New_York")
+                    converted = tz.localize(dt)
+                    timestamp = str(int(converted.timestamp()) * 1000)
+
+                    return timestamp
+
+                else:
+                    return data
+
+        else:
+            return "##set_to_blank##"
+
+    #  ---------------------------------------------------------------------
+
     def universalUpload(self, matchPPID=False):
 
         #  break file ingest out of all upload functions and into its own thing -- return clean and prepped df (validate against permissible values, etc.)
@@ -571,6 +580,12 @@ class Integration(Settings):
             self.currentEnv = env
 
             universalDF = pd.read_csv(item, dtype=str)
+
+            cols = universalDF.columns.values
+
+            for col in tqdm(cols, desc="Columns Processed", unit=" Columns"):
+                universalDF[col] = universalDF[col].astype(str).apply(self.convertUTC, args=[col])
+
             self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
@@ -621,18 +636,6 @@ class Integration(Settings):
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
 
-            cols = self.specimenDF.columns.values
-
-            #  a unique case where this is done outside the function that makes the object in OpS -- since specimens are a recursive approach, better to do it just once
-            for col in cols:
-
-                #  format to something OpS will accept
-                if "date" in col.lower():
-                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForAPI, args=[col])
-
-                elif "time" in col.lower():
-                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForBulk)
-
             self.recursiveSpecimens()
 
             shutil.move(item, self.translatorOutputDir)
@@ -660,12 +663,6 @@ class Integration(Settings):
 
         cols = self.visitDF.columns.values
 
-        for col in cols:
-
-            #  format to something OpS will accept
-            if "date" in col.lower():
-                self.visitDF[col] = self.visitDF[col].apply(self.cleanDateForAPI, args=[col])
-
         for ind, data in tqdm(self.visitDF.iterrows(), desc="Visit Uploads", unit=" Visits"):
 
             formExten = self.formExtensions[data["CP Short Title"]]
@@ -683,18 +680,20 @@ class Integration(Settings):
             ppid, cpTitle = data.get("PPID"), data.get("CP Title")
             cpShortTitle = data.get("CP Short Title")
             clinicalStatus, activityStatus = data.get("Clinical Status"), data.get("Activity Status")
-            site, status = data.get("Visit Site"), data.get("Visit Status")
             missedReason = data.get("Missed/Not Collected Reason")
             missedBy = data.get("Missed/Not Collected By#Email Address")
             surgicalPathologyNumber = data.get("Path. Number")
             cohort, visitDate = data.get("Cohort"), data.get("Visit Date")
             cprId, eventPoint = None, data.get("Event Point")
+            status = data.get("Visit Status")
 
             if self.isUniversal:
                 comments, name = data.get("Visit Comments"), data.get("Visit Name")
+                site = data.get("Collection Site")
 
             else:
                 comments, name = data.get("Comments"), data.get("Name")
+                site = data.get("Visit Site")
 
             clinicalDiagnoses = [
                 data.get(col) for col in cols if "clinical diagnosis#" in col.lower() and data.get(col) is not None
@@ -731,6 +730,7 @@ class Integration(Settings):
                 self.postResponse(extension, visit, method="PUT")
 
             else:
+                extension = self.visitExtension.replace("_", "")
                 self.postResponse(extension, visit)
 
     #  ---------------------------------------------------------------------
@@ -743,6 +743,12 @@ class Integration(Settings):
 
             self.currentEnv = env
             self.visitDF = pd.read_csv(item, dtype=str)
+
+            cols = self.visitDF.columns.values
+
+            for col in cols:
+                self.visitDF[col] = self.visitDF[col].apply(self.convertUTC, args=[col])
+
             self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
@@ -864,6 +870,10 @@ class Integration(Settings):
             self.currentEnv = env
             self.specimenDF = pd.read_csv(item, dtype=str)
             cols = self.specimenDF.columns.values
+
+            for col in cols:
+                self.specimenDF[col] = self.specimenDF[col].apply(self.convertUTC, args=[col])
+
             self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
@@ -878,17 +888,6 @@ class Integration(Settings):
                 cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
                 for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
             }
-
-            #  a unique case where this is done outside the function that makes the object in OpS -- since specimens are a recursive approach, better to do it just once
-            for col in cols:
-
-                #  format to something OpS will accept
-                if "date" in col.lower():
-                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForAPI, args=[col])
-
-                # required in the case that there are user defined forms/fields that take a date time -- behave more like a bulk upload than an API call and require specific formatting
-                elif "time" in col.lower():
-                    self.specimenDF[col] = self.specimenDF[col].apply(self.cleanDateForBulk)
 
             self.recursiveSpecimens()
 
@@ -913,19 +912,14 @@ class Integration(Settings):
 
         specimenClass, specimenType = data.get("Class"), data.get("Type")
         anatomicSite, pathology = data.get("Anatomic Site"), data.get("Pathological Status")
+        initialQty, availableQty = data.get("Initial Quantity"), data.get("Available Quantity")
         laterality, collectionStatus = data.get("Laterality"), data.get("Collection Status")
         concentration, label = data.get("Concentration"), data["Specimen Label"]
         comments = data.get("Comments")
 
-        initialQty = data.get("Initial Quantity")
-        availableQty = data.get("Available Quantity")
-
         biohazards = [data.get(col) for col in cols if "biohazard" in col.lower() and data.get(col) is not None]
 
         if self.isUniversal:
-
-            # initialQty = data.get("Quantity")
-            # availableQty = data.get("Quantity")
 
             storageLocation = {
                 "name": data.get("Container"),
@@ -934,9 +928,6 @@ class Integration(Settings):
             }
 
         else:
-
-            # initialQty = data.get("Initial Quantity")
-            # availableQty = data.get("Available Quantity")
 
             storageLocation = {
                 "name": data.get("Location#Container"),
@@ -1165,12 +1156,6 @@ class Integration(Settings):
 
         cols = self.coreDF.columns.values
 
-        for col in cols:
-
-            #  format to something OpS will accept
-            if "date" in col.lower():
-                self.coreDF[col] = self.coreDF[col].apply(self.cleanDateForAPI, args=[col])
-
         self.arrayDF = self.coreDF.drop_duplicates(subset=["Name"])
 
         for ind, data in tqdm(self.arrayDF.iterrows(), desc="Array Uploads", unit=" Arrays"):
@@ -1238,6 +1223,12 @@ class Integration(Settings):
 
             self.currentEnv = env
             self.coreDF = pd.read_csv(item, dtype=str)
+
+            cols = self.coreDF.columns.values
+
+            for col in cols:
+                self.coreDF[col] = self.coreDF[col].apply(self.convertUTC, args=[col])
+
             self.setCPDF()
 
             self.makeArray(forcePending)
@@ -2084,7 +2075,7 @@ integrate = Integration()
 # integrate.uploadSpecimens()
 # integrate.syncWorkflowList()
 # integrate.uploadParticipants()
-# integrate.universalUpload()
+integrate.universalUpload()
 # integrate.uploadArrays()
 # integrate.syncWorkflows()
-integrate.updateWorkflows()
+# integrate.updateWorkflows()
