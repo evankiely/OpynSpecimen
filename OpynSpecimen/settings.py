@@ -9,6 +9,8 @@ class Settings:
         #  ---------------------------------------------------------------------
         # Things most users will want/need to change -- OpS profile details, file paths, etc.
         #  ---------------------------------------------------------------------
+        
+        self.baseURL = "https://openspecimen_.domain.domain.domain/rest/ng/"
 
         self.envs = {
             "test": {
@@ -88,7 +90,6 @@ class Settings:
         # Things that will only change if OpS changes -- API endpoints, internal reference values, etc.
         #  ---------------------------------------------------------------------
 
-        self.baseURL = "https://openspecimen_.domain.domain.domain/rest/ng/"
         self.authExtension = "sessions"
         self.uploadExtension = "import-jobs/"
         self.formListExtension = "forms"
