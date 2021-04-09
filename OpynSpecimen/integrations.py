@@ -316,9 +316,51 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def validateData(self, template):
+    def fillQuantities(self, item):
 
-        pass
+        df = pd.read_csv(item, dtype=str)
+
+        parentFilt = (pd.isna(df["Parent Specimen Label"])) & (pd.notna(df["Initial Quantity"]))
+        parentDF = df.loc[parentFilt]
+
+        for ind, data in parentDF.iterrows():
+
+            parentQuantity = data["Initial Quantity"]
+
+            filt = df["Parent Specimen Label"] == data["Specimen Label"]
+            children = df.loc[filt]
+
+            # If no aliquots from a parent, do nothing
+            if not children.empty:
+
+                df.loc[ind, "Available Quantity"] = "0"
+
+                if children["Initial Quantity"].empty:
+
+                    numChildren = children["Specimen Label"].count()
+                    childLabels = children["Specimen Label"].values
+
+                    for label in childLabels:
+
+                        childFilt = df["Specimen Label"] == label
+
+                        df.loc[childFilt, ["Initial Quantity", "Available Quantity"]] = str(
+                            float(parentQuantity) / numChildren
+                        )
+
+        derivativeFilt = (
+            (pd.notna(df["Lineage"]))
+            & (df["Lineage"] == "Derived")
+            & (pd.notna(df["Initial Quantity"]))
+            & (pd.isna(df["Available Quantity"]))
+        )
+
+        derivativeDF = df.loc[derivativeFilt]
+
+        for ind, val in derivativeDF.iterrows():
+            df.loc[ind, "Available Quantity"] = df.loc[ind, "Initial Quantity"]
+
+        return df
 
     #  ---------------------------------------------------------------------
     #  uses system-wide ids to match an existing participant profile
@@ -373,7 +415,7 @@ class Integration(Settings):
                 exten = self.buildExtensionDetail(formExten, data)
 
                 #  now we define all the remaining variables
-            data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
+            data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
             #  putting mrn sites and vals into lists
             siteNames = [
@@ -527,7 +569,11 @@ class Integration(Settings):
 
     def convertUTC(self, data, col):
 
-        if data != "nan":
+        tz = pytz.timezone(self.timezone)
+        dtVals = ["date", "time", "created on"]
+        isDTCol = [(True if val in col.lower() else False) for val in dtVals]
+
+        if True in isDTCol and pd.notna(data):
 
             if "birth" in col.lower() or "death" in col.lower():
 
@@ -538,28 +584,23 @@ class Integration(Settings):
 
             else:
 
-                dtVals = ["date", "time", "created"]
-                isDTCol = [(True if val in col.lower() else False) for val in dtVals]
+                try:
+                    dt = datetime.strptime(data, self.datetimeFormat)
 
-                if True in isDTCol:
+                except:
+                    dt = datetime.strptime(data, self.dateFormat)
 
-                    try:
-                        dt = datetime.strptime(data, "%m/%d/%Y %H:%M:%S")
-
-                    except:
-                        dt = datetime.strptime(data, "%m/%d/%Y")
-
-                    tz = pytz.timezone("America/New_York")
-                    converted = tz.localize(dt)
-                    timestamp = str(int(converted.timestamp()) * 1000)
-
-                    return timestamp
-
-                else:
-                    return data
+        # considered returning filler date if birth or death in col, but probably best not to
+        elif True in isDTCol[:1] and "death" not in col.lower() and "birth" not in col.lower():
+            dt = datetime.strptime(self.fillerDate, self.dateFormat)
 
         else:
-            return "##set_to_blank##"
+            return data
+
+        converted = tz.localize(dt)
+        timestamp = str(int(converted.timestamp()) * 1000)
+
+        return timestamp
 
     #  ---------------------------------------------------------------------
 
@@ -584,7 +625,7 @@ class Integration(Settings):
             cols = universalDF.columns.values
 
             for col in tqdm(cols, desc="Columns Processed", unit=" Columns"):
-                universalDF[col] = universalDF[col].astype(str).apply(self.convertUTC, args=[col])
+                universalDF[col] = universalDF[col].apply(self.convertUTC, args=[col])
 
             self.setCPDF()
 
@@ -599,34 +640,34 @@ class Integration(Settings):
 
             #  NOTE: also drop any irrelevant specimen/visit columns to reduce redundant processing, etc. and do so for all the below
             #  , "PMI#1#Site Name", "PMI#1#MRN"
-            self.participantDF = universalDF.drop_duplicates(
-                subset=[
-                    "CP Short Title",
-                    "First Name",
-                    "Last Name",
-                    "Middle Name",
-                    "Date Of Birth",
-                ]
-            )
+            # self.participantDF = universalDF.drop_duplicates(
+            #     subset=[
+            #         "CP Short Title",
+            #         "First Name",
+            #         "Last Name",
+            #         "Middle Name",
+            #         "Date Of Birth",
+            #     ]
+            # )
 
-            #  getting all visit additional field form info and making a dict as above
-            self.formExtensions = {
-                cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
-            }
+            # #  getting all visit additional field form info and making a dict as above
+            # self.formExtensions = {
+            #     cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
+            #     for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+            # }
 
-            self.makeParticipants(matchPPID=matchPPID)
+            # self.makeParticipants(matchPPID=matchPPID)
 
-            # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
-            self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"])
+            # # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
+            # self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"])
 
-            #  getting all visit additional field form info and making a dict as above
-            self.formExtensions = {
-                cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
-            }
+            # #  getting all visit additional field form info and making a dict as above
+            # self.formExtensions = {
+            #     cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
+            #     for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+            # }
 
-            self.makeVisits()
+            # self.makeVisits()
 
             self.specimenDF = universalDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"])
 
@@ -674,7 +715,7 @@ class Integration(Settings):
             else:
                 extensionDetail = Extension()
 
-            data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
+            data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
             eventId, eventLabel = data.get("Event Id"), data.get("Event Label")
             ppid, cpTitle = data.get("PPID"), data.get("CP Title")
@@ -797,7 +838,7 @@ class Integration(Settings):
             for ind, data in tqdm(self.specimenDF.loc[filt].iterrows(), desc="Recursive Specimens", unit=" Specimens"):
 
                 #  aliquot label format may be set at system level, so better to be accomodative in those cases
-                if not pd.isna(data["Specimen Label"]) or data["Lineage"].lower() == "aliquot":
+                if pd.notna(data["Specimen Label"]) or data["Lineage"].lower() == "aliquot":
 
                     specimenLabel = data["Specimen Label"]
                     extension = self.specimenExtension
@@ -908,7 +949,7 @@ class Integration(Settings):
 
         lineage = data["Lineage"]
         cols = data.index
-        data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
+        data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
         specimenClass, specimenType = data.get("Class"), data.get("Type")
         anatomicSite, pathology = data.get("Anatomic Site"), data.get("Pathological Status")
@@ -1073,7 +1114,7 @@ class Integration(Settings):
             extensionDetail = Extension()
 
         cols = data.index
-        data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
+        data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
         initialQty, specimenLabel = data.get("Initial Quantity"), data.get("Specimen Label")
         collectionStatus, createdOn = data.get("Collection Status"), data.get("Created On")
@@ -1133,7 +1174,7 @@ class Integration(Settings):
 
         for ind, data in tqdm(self.coreDF.loc[filt].iterrows(), desc="Core Uploads", unit=" Cores"):
 
-            data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
+            data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
             row = data.get("Cores Detail#Row")
             column = data.get("Cores Detail#Column")
 
@@ -1163,7 +1204,7 @@ class Integration(Settings):
             extension = self.arrayExtension
             setComplete = False
 
-            data = {col: (data[col] if not pd.isna(data[col]) else None) for col in cols}
+            data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
             name, length = data.get("Name"), data.get("Length (mm)")
             width, thickness = data.get("Width (mm)"), data.get("Thickness (mm)")
@@ -1409,7 +1450,7 @@ class Integration(Settings):
 
             for cp, shortTitle, title in zip(self.cpDF[env], self.cpDF["cpShortTitle"], self.cpDF["cpTitle"]):
 
-                if not pd.isna(cp):
+                if pd.notna(cp):
 
                     if title != "N/A -- Group Workflow":
 
@@ -1533,7 +1574,7 @@ class Integration(Settings):
             for formName, val in zip(self.formDF["formName"], self.formDF[env]):
 
                 #  needed because nan in pandas is a float, so it's not sufficient to just convert to int -- throws error when trying to convert float nan
-                if not pd.isna(val):
+                if pd.notna(val):
 
                     extension = f"{self.formExtension}{int(val)}/true"
                     fieldList = self.getResponse(extension)
@@ -1827,7 +1868,7 @@ class Integration(Settings):
                     if shortTitleKey != "name" and cpTitle != "N/A -- Group Workflow":
 
                         #  If the short title from the DF is not in the list, and there is a non-None val for the code
-                        if cpShortTitle not in shortTitles and not pd.isna(self.cpDF.loc[filt, env].item()):
+                        if cpShortTitle not in shortTitles and pd.notna(self.cpDF.loc[filt, env].item()):
 
                             self.cpDF.loc[filt, env] = None
                             workflowLocation = f"./workflows/{env}/{cpShortTitle}.json"
@@ -1837,7 +1878,7 @@ class Integration(Settings):
 
                     elif shortTitleKey == "name" and cpTitle == "N/A -- Group Workflow":
 
-                        if cpShortTitle not in shortTitles and not pd.isna(self.cpDF.loc[filt, env].item()):
+                        if cpShortTitle not in shortTitles and pd.notna(self.cpDF.loc[filt, env].item()):
 
                             self.cpDF.loc[filt, env] = None
                             workflowLocation = f"./workflows/{env}/{cpShortTitle}.json"
@@ -2029,7 +2070,7 @@ class Integration(Settings):
                     filt = self.formDF["formName"] == name
 
                     #  If the form name from the DF is not in the list of current forms, and there is a non-None val for the code
-                    if name not in forms and not pd.isna(self.formDF.loc[filt, env].any()):
+                    if name not in forms and pd.notna(self.formDF.loc[filt, env].any()):
 
                         self.formDF.loc[filt, f"{env}ShortName"] = None
                         self.formDF.loc[filt, env] = None
