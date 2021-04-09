@@ -36,6 +36,13 @@ class Settings:
         self.translatorOutputDir = "./output/"  #  only need output for now because uploads won't have output, so no need to distinguish between that and translator
         self.uploadInputDir = "./input/upload/"
 
+        # for more info on date formats, see here: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+
+        self.dateFormat = "%m/%d/%Y"
+        self.datetimeFormat = "%m/%d/%Y %H:%M:%S"
+        self.timezone = "America/New_York"
+        self.fillerDate = "01/01/1900"  #  date to be used when one is missing and it needs to be obviously fake
+
         # templateTypes included here in case a user doesn't like the key reference vals (used in naming file for genericBulkUpload)
         # could replace "specimenaliquot": "specimenaliquot" with "aliquot": "specimenaliquot" for example, which would make file naming for uploads, etc. cleaner
         # sourced from: https://docs.google.com/spreadsheets/d/1fFcL91jSoTxusoBdxM_sr6TkLt65f25YPgfV-AYps4g/edit#gid=0
@@ -102,6 +109,8 @@ class Settings:
         self.aliquotExtension = "specimens/collect"
         self.arrayExtension = "specimen-arrays/"
         self.coreExtension = "specimen-arrays/_/cores"  # where _ is {arrayDetails['id']}
+
+        self.setBlankCode = "##set_to_blank##"
 
         self.pvExtensionDetails = {
             "pvExtension": "permissible-values/",
