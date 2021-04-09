@@ -1,4 +1,5 @@
 tqdm
+pytz
 numpy
 pandas
 requests
