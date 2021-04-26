@@ -96,6 +96,7 @@ class Settings:
         self.formExtension = "de-forms/"
         self.cpWorkflowListExtension = "collection-protocols/"
         self.cpWorkflowExtension = "collection-protocols/_/workflows"
+        self.cpDefExtension = "collection-protocols/definition"
         self.groupWorkflowListExtension = "collection-protocol-groups/"
         self.groupWorkflowExtension = "collection-protocol-groups/_/workflows-file"
         self.dropdownExtension = "permissible-values/attributes"
