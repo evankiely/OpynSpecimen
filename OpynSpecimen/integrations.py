@@ -286,6 +286,31 @@ class Integration(Settings):
 
             shutil.move(inputItemLoc, self.translatorOutputDir)
 
+    #  ---------------------------------------------------------------------
+
+    def uploadCPJSON(self):
+
+        inputItems = [item for item in os.listdir(self.uploadInputDir) if item.split("_")[0].lower() == "cpdef"]
+
+        for item in inputItems:
+
+            if not item.endswith(".json"):
+                raise TypeError("Input files must be of type .JSON")
+
+            if item.split("_")[1].lower() in self.envs.keys():
+                self.currentEnv = item.split("_")[1].lower()
+
+            else:
+                raise KeyError(
+                    "Upload file names must be in the following format: [Category]_[Environment Key]_[Additional Misc. Content].CSV"
+                )
+
+            inputItemLoc = self.uploadInputDir + item
+            files = [("file", (".json", open(inputItemLoc, "rb"), "application/octet-stream"))]
+            response = self.postFile(self.cpDefExtension, files)
+
+            shutil.move(inputItemLoc, self.translatorOutputDir)
+
     #  ---------------------------------------------------------------------  Should look into including args in functions being passed into .apply so this can be combined with below "ForAPI"
     #  combine these date cleaning functions with forBulk or forAPI flags to change the ordering -- need to figure out how to pass args/kwargs to pd.apply()
     def cleanDateForBulk(self, date):
@@ -348,6 +373,8 @@ class Integration(Settings):
                             float(parentQuantity) / numChildren
                         )
 
+        # for derived specimens that started with some available quantity, and were ignored above as a result
+        # just populating from intial to available if there is an initial but no available
         derivativeFilt = (
             (pd.notna(df["Lineage"]))
             & (df["Lineage"] == "Derived")
@@ -360,7 +387,9 @@ class Integration(Settings):
         for ind, val in derivativeDF.iterrows():
             df.loc[ind, "Available Quantity"] = df.loc[ind, "Initial Quantity"]
 
-        return df
+        df.to_csv(item, index=False)
+
+        # return df
 
     #  ---------------------------------------------------------------------
     #  uses system-wide ids to match an existing participant profile
@@ -446,7 +475,7 @@ class Integration(Settings):
             deathDate, gender = data.get("Death Date"), data.get("Gender")
             sexGenotype, externalSubjectId = None, data.get("External Subject ID")
             empi, activityStatus = data.get("eMPI"), data.get("Activity Status")
-            ppid, registrationDate = int(data.get("PPID")), data.get("Registration Date")
+            ppid, registrationDate = data.get("PPID"), data.get("Registration Date")
             idVal = None
 
             #  rather than structuring them as nested dicts, just pass them to an object and let jsonPickle handle the rest
@@ -511,6 +540,21 @@ class Integration(Settings):
             #  finally, if they don't exist in openspecimen at all, just make them a new profile
             else:
                 response = self.postResponse(extension, participant, matchPPID=matchPPID)
+
+            # Below is intended as a way to capture and write new PPIDs created when uploading data which excludes them
+            # Currently leaving isUniversal as filter because the participantUpload function hasn't been updated similarly
+
+            # if self.isUniversal and response and data.get("PPID") is None:
+
+            #     filt = (
+            #         (self.universalDF["First Name"] == firstName)
+            #         & (self.universalDF["Last Name"] == lastName)
+            #         & (self.universalDF["Date Of Birth"] == birthDate)
+            #     )
+
+            #     self.universalDF.loc[filt, "PPID"] = response["ppid"]
+            #     self.universalUpdated.loc[filt, "PPID"] = response["ppid"]
+            #     self.universalUpdated.to_csv(self.currentItem, index=False)
 
     #  ---------------------------------------------------------------------
     #  This is a confusing function because OpS relies very heavily on generic attribute names. In this case, what is meant by "id" in the docs varies by context
@@ -619,18 +663,19 @@ class Integration(Settings):
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
             self.currentEnv = env
+            self.currentItem = item
+            self.universalDF = pd.read_csv(item, dtype=str)
+            self.universalUpdated = self.universalDF.copy()
 
-            universalDF = pd.read_csv(item, dtype=str)
-
-            cols = universalDF.columns.values
+            cols = self.universalDF.columns.values
 
             for col in tqdm(cols, desc="Columns Processed", unit=" Columns"):
-                universalDF[col] = universalDF[col].apply(self.convertUTC, args=[col])
+                self.universalDF[col] = self.universalDF[col].apply(self.convertUTC, args=[col])
 
             self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
-            cpIDs = universalDF["CP Short Title"].unique()
+            cpIDs = self.universalDF["CP Short Title"].unique()
             cpIDs = {
                 cpShortTitle: self.cpDF.loc[(self.cpDF["cpShortTitle"] == cpShortTitle), env].astype(
                     int, errors="ignore"
@@ -640,36 +685,33 @@ class Integration(Settings):
 
             #  NOTE: also drop any irrelevant specimen/visit columns to reduce redundant processing, etc. and do so for all the below
             #  , "PMI#1#Site Name", "PMI#1#MRN"
-            # self.participantDF = universalDF.drop_duplicates(
-            #     subset=[
-            #         "CP Short Title",
-            #         "First Name",
-            #         "Last Name",
-            #         "Middle Name",
-            #         "Date Of Birth",
-            #     ]
-            # )
 
-            # #  getting all visit additional field form info and making a dict as above
-            # self.formExtensions = {
-            #     cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
-            #     for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
-            # }
+            participantSub = ["CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"]
 
-            # self.makeParticipants(matchPPID=matchPPID)
+            self.participantDF = self.universalDF.drop_duplicates(subset=participantSub).copy()
 
-            # # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
-            # self.visitDF = universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"])
+            #  getting all visit additional field form info and making a dict as above
+            self.formExtensions = {
+                cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
+                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+            }
 
-            # #  getting all visit additional field form info and making a dict as above
-            # self.formExtensions = {
-            #     cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
-            #     for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
-            # }
+            self.makeParticipants(matchPPID=matchPPID)
 
-            # self.makeVisits()
+            # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
+            self.visitDF = self.universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
 
-            self.specimenDF = universalDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"])
+            #  getting all visit additional field form info and making a dict as above
+            self.formExtensions = {
+                cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
+                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+            }
+
+            self.makeVisits()
+
+            self.specimenDF = (
+                self.universalDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"]).copy()
+            )
 
             #  getting all specimen additional field form info and making a dict as above
             self.formExtensions = {
@@ -717,7 +759,20 @@ class Integration(Settings):
 
             data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
-            eventId, eventLabel = data.get("Event Id"), data.get("Event Label")
+            if self.isUniversal:
+                comments, name = data.get("Visit Comments"), data.get("Visit Name")
+                site = data.get("Collection Site")
+
+            else:
+                comments, name = data.get("Comments"), data.get("Name")
+                site = data.get("Visit Site")
+
+            eventLabel = data.get("Event Label")
+
+            if name is None and eventLabel is None:
+                raise Exception("A Visit Name or Event Label is required")
+
+            eventId, status = data.get("Event Id"), data.get("Visit Status")
             ppid, cpTitle = data.get("PPID"), data.get("CP Title")
             cpShortTitle = data.get("CP Short Title")
             clinicalStatus, activityStatus = data.get("Clinical Status"), data.get("Activity Status")
@@ -726,15 +781,6 @@ class Integration(Settings):
             surgicalPathologyNumber = data.get("Path. Number")
             cohort, visitDate = data.get("Cohort"), data.get("Visit Date")
             cprId, eventPoint = None, data.get("Event Point")
-            status = data.get("Visit Status")
-
-            if self.isUniversal:
-                comments, name = data.get("Visit Comments"), data.get("Visit Name")
-                site = data.get("Collection Site")
-
-            else:
-                comments, name = data.get("Comments"), data.get("Name")
-                site = data.get("Visit Site")
 
             clinicalDiagnoses = [
                 data.get(col) for col in cols if "clinical diagnosis#" in col.lower() and data.get(col) is not None
@@ -768,11 +814,27 @@ class Integration(Settings):
             if visit.code:
 
                 extension = self.visitExtension.replace("_", str(visit.code))
-                self.postResponse(extension, visit, method="PUT")
+                response = self.postResponse(extension, visit, method="PUT")
 
             else:
                 extension = self.visitExtension.replace("_", "")
-                self.postResponse(extension, visit)
+                response = self.postResponse(extension, visit)
+
+            # Below is intended as a way to capture and write new Visit Names created when uploading data which excludes them
+
+            # if response and name is None:
+
+            #     if self.isUniversal:
+
+            #         self.universalDF.loc[ind, "Visit Name"] = response["name"]
+            #         self.universalUpdated.loc[ind, "Visit Name"] = response["name"]
+            #         self.universalUpdated.to_csv(self.currentItem, index=False)
+
+            #     else:
+
+            #         self.visitDF.loc[ind, "Visit Name"] = response["name"]
+            #         self.visitUpdated.loc[ind, "Visit Name"] = response["name"]
+            #         self.visitUpdated.to_csv(self.currentItem, index=False)
 
     #  ---------------------------------------------------------------------
     #  still need to account for visit additional fields, and logging failures, etc.
@@ -783,7 +845,9 @@ class Integration(Settings):
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
             self.currentEnv = env
+            self.currentItem = item
             self.visitDF = pd.read_csv(item, dtype=str)
+            self.visitUpdated = self.visitDF.copy()
 
             cols = self.visitDF.columns.values
 
@@ -810,14 +874,13 @@ class Integration(Settings):
             shutil.move(item, self.translatorOutputDir)
 
     #  ---------------------------------------------------------------------
-    #  eventually move to recursive .apply()? need to figure out how to pass args
+
     def recursiveSpecimens(self, parentSpecimen=None):
 
         #  simple way of avoiding dealing with lists of aliquots for now, since they're unlikely to actually be parent of anything in the near term
         if isinstance(parentSpecimen, list):
             return
 
-        #  NOTE: for cases where labels are integers, convert to string then strip the .0, because pandas will represent int as floats for any column where there are NaNs
         if parentSpecimen:
             filt = (self.specimenDF["Parent Specimen Label"] == parentSpecimen["label"]) & (
                 self.specimenDF["Lineage"].str.lower() != "new"
@@ -909,7 +972,10 @@ class Integration(Settings):
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
             self.currentEnv = env
+            self.currentItem = item
             self.specimenDF = pd.read_csv(item, dtype=str)
+            self.specimenUpdated = self.specimenDF.copy()
+
             cols = self.specimenDF.columns.values
 
             for col in cols:
@@ -1116,13 +1182,14 @@ class Integration(Settings):
         cols = data.index
         data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
-        initialQty, specimenLabel = data.get("Initial Quantity"), data.get("Specimen Label")
+        initialQty, availableQty = data.get("Initial Quantity"), data.get("Available Quantity")
         collectionStatus, createdOn = data.get("Collection Status"), data.get("Created On")
-        comments = data.get("Comments")
+        comments, specimenLabel = data.get("Comments"), data.get("Specimen Label")
 
         aliquot = Aliquot(
             specimenLabel,
             initialQty,
+            availableQty,
             collectionStatus,
             createdOn,
             extensionDetail,
@@ -1140,7 +1207,7 @@ class Integration(Settings):
             aliquot.visitId = referenceSpec["Parent"].get("visitId")
 
         if data.get("Quantity"):
-            aliquot = [aliquot for aliquot in range(data.get("Quantity"))]
+            aliquot = [aliquot for val in range(data.get("Quantity"))]
 
         else:
             aliquot = [aliquot]
@@ -2116,7 +2183,10 @@ integrate = Integration()
 # integrate.uploadSpecimens()
 # integrate.syncWorkflowList()
 # integrate.uploadParticipants()
-integrate.universalUpload()
 # integrate.uploadArrays()
 # integrate.syncWorkflows()
 # integrate.updateWorkflows()
+# integrate.fillQuantities("./input/upload/universal_dev_LSB.csv")
+# integrate.universalUpload()
+# print("Done!")
+integrate.uploadCPJSON()
