@@ -137,7 +137,7 @@ This library is designed to help overcome various points of friction discovered 
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the participant first, and then fall back to matching against existing if that fails. If the match fails, it will not push data into the profile with the same PPID
- - `Integration.convertUTC(data, col)`
+- `Integration.convertUTC(data, col)`
   - Handles datetime conversion for uploads, using the Time Zone specified in the Settings object. For Birth and Death Dates, rearranges the date to fit the expectations of OpS. Otherwise, does a true conversion to UTC using the date and/or datetime formats specified in the Settings object.
   - **data**: A Pandas Series representing a single column of data to be uploaded
   - **col**: The name of the column being operated on
