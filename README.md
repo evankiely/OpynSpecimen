@@ -4,7 +4,7 @@ An object oriented wrapper and tooling for the OpenSpecimen API, written in Pyth
 ![GitHub](https://img.shields.io/github/license/evankiely/OpynSpecimen) ![GitHub all releases](https://img.shields.io/github/downloads/evankiely/OpynSpecimen/total)
 
 ## Introduction
-This package is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
+This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
 ## Getting Started
 
@@ -65,6 +65,16 @@ This package is designed to help overcome various points of friction discovered 
   - The path used to dictate where the translator object should save output documents (currently used as the output directory for all outputs)
 - `Settings.uploadInputDir`
   - The path used to dictate where the integrations object should look for input documents when doing uploads
+- `Settings.dateFormat`
+  - The format used for dates which do not include a time as well
+- `Settings.datetimeFormat`
+  - The format used for datetimes
+- `Settings.timezone`
+  - The timezone of the server
+- `Settings.fillerDate`
+  - A date that is old enough to be obviously fake in the cases where one is required or would be beneficial, but is not included in the data
+- `Settings.templateTypes`
+  - A dictionary of codes OpS uses to distinguish between template types; used with the genericBulkUpload function in the Integration object
 
 #### Translator
 - `Translator.loadDF(path)`
@@ -109,13 +119,14 @@ This package is designed to help overcome various points of friction discovered 
   - A generic function used to upload files via the API rather than the GUI. Behaves exactly the same as if you were doing a bulk upload of data via the OpenSpecimen templates and GUI
   - **importType**: Whether the data is intended to `"CREATE"` new records, or `"UPDATE"` old ones
   - **checkStatus**: Whether or not to check in on the status of an upload every few seconds and print that information to the console
+- `Integration.uploadCPJSON()`
+  - A generic function used to upload Collection Protocol JSON files via the API rather than the GUI. This is specifically for the full Collection Protocol and not just the Workflow
 - `Integration.cleanDateForBulk(date)`
   - A generic function that cleans and formats dates to something the OpenSpecimen bulk upload function will accept
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForBulk)`
-- `Integration.cleanDateForAPI(date, col)`
-  - A generic function that cleans and formats dates to something the OpenSpecimen API will accept
-  - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForAPI)`
-  - **col**: The header of the column being acted upon. As above, this is used in the context of `pd.apply()` as in `pd.apply(cleanDateForAPI, args=[col])`
+- `Integration.fillQuantities(item)`
+  - Applied to a .CSV which includes the "Initial Quantity" and "Available Quantity" fields. Reads in the .CSV, selects Parent Specimens which have an Initial Quantity, identifies the Child Specimens of those Parents, sets the Parent Available Quantity to 0, and distributes the Initial Quantity of the Parent to all identified Children evenly, so long as none of those Children already have an Initial Quantity value. If any Children have an Initial Quantity, the Parent Available Quantity is set to 0, but Children are not updated, since it's not clear how to account for the pre-existing Initial Quantity that was identified. All derivatives/aliquots which have an Initial Quantity and no Available Quantity specified are updated such that the Available Quantity reflects the Initial Quantity.
+  - **item**: A file path
 - `Integration.matchParticipants(pmis=None, empi=None)`
   - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI, which are system-wide IDs
   - **pmis**: A dictionary structured like `{"siteName": mrnSite, "mrn": mrnVal}`
@@ -126,6 +137,10 @@ This package is designed to help overcome various points of friction discovered 
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the participant first, and then fall back to matching against existing if that fails. If the match fails, it will not push data into the profile with the same PPID
+ - `Integration.convertUTC(data, col)`
+  - Handles datetime conversion for uploads, using the Time Zone specified in the Settings object. For Birth and Death Dates, rearranges the date to fit the expectations of OpS. Otherwise, does a true conversion to UTC using the date and/or datetime formats specified in the Settings object.
+  - **data**: A Pandas Series representing a single column of data to be uploaded
+  - **col**: The name of the column being operated on
 - `Integration.universalUpload(matchPPID=False)`
   - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
