@@ -1,16 +1,3 @@
-#  DRY this code and implement some of the below as generators/distinct, generic functions that are broadly applicable
-
-#  Next refactor will focus on refining the update functions (and trying to be more legitimately object oriented potentially?)
-#  add more robust error logging/make the process more verbose/communicative (use tqdm?) so the user knows what's going on
-#  Also all the Pandas related code -- need to do a better job of using boolean indexing and .apply() to improve efficiency, modularity, and readability -- also, when using a pair of row and column details, use .at[] instead of .loc[]
-#  Ability to pull permissible values from Forms which have Radio Buttons, Checkboxes, etc.?
-#  would be nice to learn more about vectorization of code and see if I can improve speed
-#  Add update dropdowns list/PVs (add new, remove any that no longer exist, track last sync and pull down if outside a certain range, etc.)
-
-#  review use of "is" vs. == -- recall that is points to an object in memory whereas == is a value equivalence check
-#  make use of the continue keyword
-#  use f strings with '' internal when wrapped with "" to avoid need to declare additional variables that then get passed in
-#  NOTE: Use this for blank dates, etc. that shouldn't default to today or some other value --> ##set_to_blank##
 
 import os
 import json
@@ -2165,5 +2152,3 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-
-integrate = Integration()
