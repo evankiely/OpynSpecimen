@@ -1,13 +1,3 @@
-#  Look for list.txt or .csv if bulk  -- use human readable names and reference against cp dictionary, then pull workflows, translate, and output
-#  Take individual .json docs with specified naming convention as well
-
-#  Add flags for fields that have no equivalent & list of forms that should be attached when transitioning to a new env
-#  Add Fire module for CLI
-
-#  Add Feeling lucky flag -- directly replace codes rather than append
-
-#  Add ability to recognize Specimen Additional Fields -- always in this format: specimen.extensionDetail.attrsMap.____
-#  No way to tell what is attached at that level, so default to looking for a form called "Specimen Additional Fields"
 
 import os
 import re
@@ -431,15 +421,4 @@ class Translator(Settings):
                                 writer = csv.writer(reqForms)
                                 writer.writerow([cp, formList])
 
-
-translator = Translator()
-translator.translate()
-# translator.translate(openDiff=True)
-
-# diffFiles = [["WINSHIPTCC.json", "dev"], ["WINSHIPTCC.json", "prod"]]
-
-# translator.getDiffReport(fileNames=diffFiles, directComp=True)
-
-# paths = ["./Central_Biobanking_workflows.json", "./Central_Biobank_Clone-_DO_NOT_USE_workflows.json"]
-
-# translator.getDiffReport(filePaths=paths, directComp=True, openOnFinish=True)
+                                
