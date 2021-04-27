@@ -20,7 +20,7 @@ This library is designed to help overcome various points of friction discovered 
 - Note the variables you associated with these credentials and alter the Settings class's `self.envs` attribute to reflect them
   - You should ideally avoid reusing credentials across your OpenSpecimen instances, which means the environmental variables themselves will need to be named differently in order to distinguish them from one another
   - The Settings class accounts for this by providing three examples that you can modify -- currently set as **test**, **dev**, and **prod**. To alter these, just replace the text in quotes within the `self.getEnVar` function call to reflect the variable names you created previously
-  - If you have more than three instances of OpenSpecimen, you can always copy/paste what is already there to add more. However, be mindful that you need to replace the key for the copy/pasted values, as dictionaries may only have a single instance of a given key, and because this key is used later to properly format the URL that is used to interface with the API
+  - If you have more than three instances of OpenSpecimen, you can always copy/paste what is already there to add more. However, be mindful that you need to replace the key for the copy/pasted values, because this key is used later to properly format the URL that is used to interface with the API
 - Next you should update the `self.baseURL` attribute of the Settings class to reflect the general URL of the OpenSpecimen instances you use
   - As with the environmental variables, the functions contained here have an assumption regarding the formatting of your URL
     - They expect that you include some keyword to distinguish the instances, and that the keyword will be represented by an underscore (as in openspecimen_.openspecimen.com)
@@ -36,11 +36,11 @@ This library is designed to help overcome various points of friction discovered 
 - **Upload Classes**
 
 ### Core Functionality
-- The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance(s) of OpenSpecimen, live; it forms the basis for the other classes, which inherit their knowledge of the API, etc., from it.
-  - The intent is to remove the need for non-technical folks to change things in the core functions of the Translator and Integration objects
+- The **Settings** class is where all the details of the OpenSpecimen API, and your particular instance(s) of OpenSpecimen, live; it forms the basis for the other classes, which inherit their knowledge of the API endpoints, etc., from it.
+  - The intent is to remove the need for users to change things in the core functions of the Translator and Integration objects
   - The content of this class should remain mostly static, since it consists primarily of details of the OpenSpecimen API. The few things that you will need/want to customize are discussed below
 - The **Translator** class enables easy, human in the loop transitioning of Collection Protocol Workflows between environments, and a generic Diff Report function to compare Workflows
-- The **Integration** class provides a robust suite of functions to interface with the OpenSpecimen API, including pulling down internal IDs of Collection Protocols, Forms, Fields, etc., along with upload capabilities for all OpenSpecimen provided templates, as well as custom implimentations for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document upload.
+- The **Integration** class provides a robust suite of functions to interface with the OpenSpecimen API, with upload capabilities for all OpenSpecimen provided templates, as well as custom implimentations for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document based upload, in addition to Arrays, Cores, and more.
   - It is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
 - The **Upload Classes** are a set of Python objects that are used to organize and store information before being serialized to JSON and passed to the API
 
@@ -110,7 +110,7 @@ This library is designed to help overcome various points of friction discovered 
   - **extension**: The extension to be appended to the default URL
   - **data**: A dictionary of any data the request may allow/require
   - **method**: The type of request; currently tested with `"PUT"` and `"POST"`
-  - **matchPPID**: Used when uploading participants; if `True`, will match existing participants in a Collection Protocol to those being uploaded based on PPID and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: Used when uploading participants; See makeParticipants/uploadParticipants for more details
 - `Integration.postFile(extension, files)`
   - A generic function used to upload files via the OpenSpecimen API
   - **extension**: The extension to be appended to the default URL
@@ -125,7 +125,8 @@ This library is designed to help overcome various points of friction discovered 
   - A generic function that cleans and formats dates to something the OpenSpecimen bulk upload function will accept
   - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForBulk)`
 - `Integration.fillQuantities(item)`
-  - Applied to a .CSV which includes the "Initial Quantity" and "Available Quantity" fields. Reads in the .CSV, selects Parent Specimens which have an Initial Quantity, identifies the Child Specimens of those Parents, sets the Parent Available Quantity to 0, and distributes the Initial Quantity of the Parent to all identified Children evenly, so long as none of those Children already have an Initial Quantity value. If any Children have an Initial Quantity, the Parent Available Quantity is set to 0, but Children are not updated, since it's not clear how to account for the pre-existing Initial Quantity that was identified. All derivatives/aliquots which have an Initial Quantity and no Available Quantity specified are updated such that the Available Quantity reflects the Initial Quantity.
+  - Applied to a .CSV which includes the "Initial Quantity" and "Available Quantity" fields.
+  - Reads in the .CSV, selects Parent Specimens which have an Initial Quantity, identifies the Child Specimens of those Parents, sets the Parent Available Quantity to 0, and distributes the Initial Quantity of the Parent to all identified Children evenly, so long as none of those Children already have an Initial Quantity value. If any Children have an Initial Quantity, the Parent Available Quantity is set to 0, but Children are not updated, since it's not clear how to account for the pre-existing Initial Quantity that was identified. All derivatives/aliquots which have an Initial Quantity and no Available Quantity specified are updated such that the Available Quantity reflects the Initial Quantity.
   - **item**: A file path
 - `Integration.matchParticipants(pmis=None, empi=None)`
   - Matches participants against those that already exist in a given environment, based on PMIS (MRN Sites and Values) or EMPI, which are system-wide IDs
@@ -133,37 +134,37 @@ This library is designed to help overcome various points of friction discovered 
   - **empi**: The participant's empi as a string or integer
 - `Integration.makeParticipants(matchPPID=False)`
   - Creates the Participant object, populates it with data, and passes it to be uploaded
-  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, participant's last name, & participant's date of birth, and merge/update them. This is very useful when the upload data has PPIDs, in addition to MRN or EMPI values, but the existing participants have only PPIDs. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the uploaded participant first, and then fall back to matching against existing PPID if the creation fails due to that PPID already being used. If the match fails on last name or date of birth, it will not push data into the profile with the same PPID
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
-  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the participant first, and then fall back to matching against existing if that fails. If the match fails, it will not push data into the profile with the same PPID
+  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, participant's last name, & participant's date of birth, and merge/update them. This is very useful when the upload data has PPIDs, in addition to MRN or EMPI values, but the existing participants have only PPIDs. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the uploaded participant first, and then fall back to matching against existing PPID if the creation fails due to that PPID already being used. If the match fails on last name or date of birth, it will not push data into the profile with the same PPID
 - `Integration.convertUTC(data, col)`
   - Handles datetime conversion for uploads, using the Time Zone specified in the Settings object. For Birth and Death Dates, rearranges the date to fit the expectations of OpS. Otherwise, does a true conversion to UTC using the date and/or datetime formats specified in the Settings object.
   - **data**: A Pandas Series representing a single column of data to be uploaded
   - **col**: The name of the column being operated on
 - `Integration.universalUpload(matchPPID=False)`
-  - The function is our answer to the "Master Specimen" template, and accomodates either that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
-  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, and merge/update them. This is very useful when the upload data has MRN or EMPI values, but the existing participants do not
+  - The function is our answer to the "Master Specimen" template, and accomodates a modified version of that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen, including "Additional Fields"), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
+  - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, participant's last name, & participant's date of birth, and merge/update them. This is very useful when the upload data has PPIDs, in addition to MRN or EMPI values, but the existing participants have only PPIDs. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the uploaded participant first, and then fall back to matching against existing PPID if the creation fails due to that PPID already being used. If the match fails on last name or date of birth, it will not push data into the profile with the same PPID
 - `Integration.matchVisit(visitName)`
   - Matches visits against those that already exist in a given environment, based on that visit's name
-  - **visitName**: The name of the visit to be matched. Will match only exact, but will match the first instance of that name, so must be unique within an given Collection Protocol
+  - **visitName**: The name of the visit to be matched. Will match only exact, but will match the first instance of that name, so must be unique within a given Collection Protocol
 - `Integration.makeVisits()`
   - Creates the Visit object, populates it with data, and passes it to be uploaded
 - `Integration.uploadVisits()`
   - The function that is called to begin the visit upload process. Looks for a document named in the following format: "visits_[envCode]_miscOtherInfo.csv"
 - `Integration.recursiveSpecimens(parentSpecimen=None)`
   - A depth-first approach to specimen creation
-  - **parentSpecimen**: Parent specimen information to allow for the child specimen to easily match where to be uploaded and, eventually, fill missing information from the parent as needed
+  - **parentSpecimen**: Parent specimen information to allow for the child specimen to easily match where to be uploaded
 - `Integration.uploadSpecimens()`
   - The function that is called to begin the specimen upload process. Looks for a document named in the following format: "specimens_[envCode]_miscOtherInfo.csv"
 - `Integration.makeSpecimen(data, referenceSpec={})`
   - Creates the Specimen object, populates it with data, and passes it to be uploaded
   - **data**: The data used to create the Specimen object
-  - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
+  - **referenceSpec**: A matched existing or parent specimen that is used to direct where the child is to be made and fills Parent ID, Storage Type, Visit ID, and Visit Name from the parent
 - `Integration.makeAliquot(data, referenceSpec={})`
   - Creates the Aliquot object, populates it with data, and passes it to be uploaded
   - **data**: The data used to create the Aliquot object
-  - **referenceSpec**: A parent specimen that is used to direct where the child is to be made and, eventually, fill missing information from the parent as needed
+  - **referenceSpec**: A matched existing or parent specimen that is used to direct where the child is to be made and fills Parent ID, Storage Type, Visit ID, and Visit Name from the parent
 - `Integration.matchArray(arrayName)`
   - Matches arrays against those that already exist in a given environment, based on that array's name
   - **arrayName**: The name of the array to be matched. Will match only exact, but will match the first instance of that name, so must be unique within OpenSpecimen
