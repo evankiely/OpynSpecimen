@@ -65,6 +65,8 @@ This library is designed to help overcome various points of friction discovered 
   - The path used to dictate where the translator object should save output documents (currently used as the output directory for all outputs)
 - `Settings.uploadInputDir`
   - The path used to dictate where the integrations object should look for input documents when doing uploads
+- `Settings.auditInputDir`
+  - The path used to dictate where the integrations object should look for input documents when performing audits
 - `Settings.dateFormat`
   - The format used for dates which do not include a time as well
 - `Settings.datetimeFormat`
