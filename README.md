@@ -123,7 +123,10 @@ This library is designed to help overcome various points of friction discovered 
   - A generic function used to upload Collection Protocol JSON files via the API rather than the GUI. This is specifically for the full Collection Protocol and not just the Workflow
 - `Integration.cleanDateForBulk(date)`
   - A generic function that cleans and formats dates to something the OpenSpecimen bulk upload function will accept
-  - **date**: A piece of data corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForBulk)`
+  - **date**: A string corresponding to a date. This is generally implied based on the column this function is applied to with `pd.apply(cleanDateForBulk)`
+- `Integration.padDates(date)`
+  - A generic function which ensures dates are formatted as 0#/0#/####, where necessary
+  - **date**: A string corresponding to a date.
 - `Integration.fillQuantities(item)`
   - Applied to a .CSV which includes the "Initial Quantity" and "Available Quantity" fields.
   - Reads in the .CSV, selects Parent Specimens which have an Initial Quantity, identifies the Child Specimens of those Parents, sets the Parent Available Quantity to 0, and distributes the Initial Quantity of the Parent to all identified Children evenly, so long as none of those Children already have an Initial Quantity value. If any Children have an Initial Quantity, the Parent Available Quantity is set to 0, but Children are not updated, since it's not clear how to account for the pre-existing Initial Quantity that was identified. All derivatives/aliquots which have an Initial Quantity and no Available Quantity specified are updated such that the Available Quantity reflects the Initial Quantity.
@@ -138,10 +141,13 @@ This library is designed to help overcome various points of friction discovered 
 - `Integration.uploadParticipants(matchPPID=False)`
   - The function that is called to begin the participant upload process. Looks for a document named in the following format: "participants_[envCode]_miscOtherInfo.csv"
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, participant's last name, & participant's date of birth, and merge/update them. This is very useful when the upload data has PPIDs, in addition to MRN or EMPI values, but the existing participants have only PPIDs. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the uploaded participant first, and then fall back to matching against existing PPID if the creation fails due to that PPID already being used. If the match fails on last name or date of birth, it will not push data into the profile with the same PPID
-- `Integration.convertUTC(data, col)`
+- `Integration.toUTC(data, col)`
   - Handles datetime conversion for uploads, using the Time Zone specified in the Settings object. For Birth and Death Dates, rearranges the date to fit the expectations of OpS. Otherwise, does a true conversion to UTC using the date and/or datetime formats specified in the Settings object.
   - **data**: A Pandas Series representing a single column of data to be uploaded
   - **col**: The name of the column being operated on
+- `Integration.fromUTC(utcVal)`
+  - Handles datetime conversion from UTC, using the Time Zone specified in the Settings object.
+  - **utcVal**: A string or integer value to be converted from UTC format
 - `Integration.universalUpload(matchPPID=False)`
   - The function is our answer to the "Master Specimen" template, and accomodates a modified version of that template or a custom template that has the fields your data requires from each of the supported upload templates (currently: participant, visit, and specimen, including "Additional Fields"), since it approaches this as a sequence of uploading those templates. We also prefer to use the term "Univseral" over "Master" in most cases. It looks for a document named in the following format: "universal_[envCode]_miscOtherInfo.csv"
   - **matchPPID**: If `True`, will match existing participants in a Collection Protocol to those being uploaded, based on PPID, participant's last name, & participant's date of birth, and merge/update them. This is very useful when the upload data has PPIDs, in addition to MRN or EMPI values, but the existing participants have only PPIDs. Set this `True` if there is even a chance that there may already be a profile in the Collection Protocol with a PPID present in the upload data, since it will default to attempting to create the uploaded participant first, and then fall back to matching against existing PPID if the creation fails due to that PPID already being used. If the match fails on last name or date of birth, it will not push data into the profile with the same PPID
