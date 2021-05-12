@@ -194,7 +194,7 @@ This library is designed to help overcome various points of friction discovered 
   - **location**: Path to the folder or file that is to be examined
   - **keyword**: The search term
 - `Integration.auditData(keyword, wantRandSample=False)`
-  - Audits data in the audit folder by comparing against what is already in OpS. Operates on .CSVs with a keyword in their name, and outputs a .CSV which logs and discrepancies
+  - Audits data in the audit folder by comparing against what is already in OpS. Operates on .CSVs with a keyword in their name, and outputs a .CSV which logs and discrepancies. Currently only supports auditing participant information
   - **keyword**: The search term
   - **wantRandSample**: Set true if only a random sample of the data in the provided .CSVs should be audited. For record sets of 30 or fewer entries, all 30 will be audited. For record sets of greater than 30, but fewer than 100 entries, 33% will be audited. For record sets of greater than 100 entries, 10% will be audited.
 - `Integration.generateRandomSample(numRecords)`
