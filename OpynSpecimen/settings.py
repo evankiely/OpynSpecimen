@@ -9,7 +9,7 @@ class Settings:
         #  ---------------------------------------------------------------------
         # Things most users will want/need to change -- OpS profile details, file paths, etc.
         #  ---------------------------------------------------------------------
-        
+
         self.baseURL = "https://openspecimen_.domain.domain.domain/rest/ng/"
 
         self.envs = {
@@ -37,6 +37,7 @@ class Settings:
         self.translatorInputDir = "./input/translate/"
         self.translatorOutputDir = "./output/"  #  only need output for now because uploads won't have output, so no need to distinguish between that and translator
         self.uploadInputDir = "./input/upload/"
+        self.auditInputDir = "./input/audit/"
 
         # for more info on date formats, see here: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
 
@@ -79,6 +80,7 @@ class Settings:
         self.requiredPaths = [
             "./resources",
             "./dropdowns",
+            "./audit",
             self.translatorInputDir,
             self.uploadInputDir,
             self.translatorOutputDir,
