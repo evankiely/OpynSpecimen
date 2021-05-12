@@ -1,9 +1,9 @@
-
 import os
 import json
 import time
 import pytz
 import shutil
+import random
 from datetime import datetime, timezone
 
 import requests
@@ -126,7 +126,9 @@ class Integration(Settings):
         if not response.ok and matchPPID:
 
             #  if there's a participant with the same PPID in the cp already, see if they match the participant being uploaded
-            if response.json()[0]["code"] == "CPR_DUP_PPID":
+            ppidErrors = ["CPR_DUP_PPID", "CPR_MANUAL_PPID_NOT_ALLOWED"]
+
+            if response.json()[0]["code"] in ppidErrors:
 
                 #  documentation was incorrect here -- do not use "DOB"
                 matchData = {
@@ -328,6 +330,27 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
+    def padDates(self, date):
+
+        if pd.isna(date) or len(date) == 10:
+            return date
+
+        else:
+
+            date = date.split("/")
+
+            if len(date[0]) == 1:
+                date[0] = "0" + date[0]
+
+            if len(date[1]) == 1:
+                date[1] = "0" + date[1]
+
+            date = "/".join(date)
+
+            return date
+
+    #  ---------------------------------------------------------------------
+
     def fillQuantities(self, item):
 
         df = pd.read_csv(item, dtype=str)
@@ -364,7 +387,7 @@ class Integration(Settings):
         # just populating from intial to available if there is an initial but no available
         derivativeFilt = (
             (pd.notna(df["Lineage"]))
-            & (df["Lineage"] == "Derived")
+            & (df["Lineage"] != "New")
             & (pd.notna(df["Initial Quantity"]))
             & (pd.isna(df["Available Quantity"]))
         )
@@ -416,6 +439,7 @@ class Integration(Settings):
     def makeParticipants(self, matchPPID=False):
 
         cols = self.participantDF.columns.values
+        self.setCPDF(envs=self.currentEnv)
 
         for ind, data in tqdm(self.participantDF.iterrows(), desc="Participant Uploads", unit=" Participants"):
 
@@ -464,6 +488,9 @@ class Integration(Settings):
             empi, activityStatus = data.get("eMPI"), data.get("Activity Status")
             ppid, registrationDate = data.get("PPID"), data.get("Registration Date")
             idVal = None
+
+            if firstName == "Generic":
+                ppid = "667-266"
 
             #  rather than structuring them as nested dicts, just pass them to an object and let jsonPickle handle the rest
 
@@ -524,9 +551,18 @@ class Integration(Settings):
                 else:
                     response = self.postResponse(extension, participant, matchPPID=matchPPID)
 
-            #  finally, if they don't exist in openspecimen at all, just make them a new profile
+            #  finally, if they don't exist in openspecimen at all, just make them a new profile, unless their activity status is disabled, in which case no need
+            # elif activityStatus is None or activityStatus.lower() != "disabled":
             else:
                 response = self.postResponse(extension, participant, matchPPID=matchPPID)
+
+            if response and ppid is None:
+                filt = (
+                    (self.universalDF["First Name"] == firstName)
+                    & (self.universalDF["Last Name"] == lastName)
+                    & (self.universalDF["Registration Date"] == registrationDate)
+                )
+                self.universalDF.loc[filt, "PPID"] = response["ppid"]
 
             # Below is intended as a way to capture and write new PPIDs created when uploading data which excludes them
             # Currently leaving isUniversal as filter because the participantUpload function hasn't been updated similarly
@@ -562,7 +598,7 @@ class Integration(Settings):
         #  TODO: change dict indexing from .get() when the value is required or check required to make sure they're not None and raise error if they are
         #  if a participant matches, check their details -- if all details match what is to be uploaded, no need to do anything and can skip to the next person
 
-        inputItems = self.validateInputFiles("participants")
+        inputItems = self.validateInputFiles(self.uploadInputDir, "participants")
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
@@ -573,7 +609,7 @@ class Integration(Settings):
             cols = self.participantDF.columns.values
 
             for col in cols:
-                self.participantDF[col] = self.participantDF[col].apply(self.convertUTC, args=[col])
+                self.participantDF[col] = self.participantDF[col].apply(self.toUTC, args=[col])
 
             self.setCPDF()
 
@@ -598,7 +634,7 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def convertUTC(self, data, col):
+    def toUTC(self, data, col):
 
         tz = pytz.timezone(self.timezone)
         dtVals = ["date", "time", "created on"]
@@ -635,6 +671,19 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
+    def fromUTC(self, utcVal):
+
+        if utcVal is None:
+            return None
+
+        elif isinstance(utcVal, str):
+            utcVal = int(utcVal)
+
+        data = datetime.utcfromtimestamp(utcVal / 1000).strftime("%m/%d/%Y")
+        return data
+
+    #  ---------------------------------------------------------------------
+
     def universalUpload(self, matchPPID=False):
 
         #  break file ingest out of all upload functions and into its own thing -- return clean and prepped df (validate against permissible values, etc.)
@@ -645,7 +694,7 @@ class Integration(Settings):
         #  repeat for specimens
 
         self.isUniversal = True
-        inputItems = self.validateInputFiles("universal")
+        inputItems = self.validateInputFiles(self.uploadInputDir, "universal")
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
@@ -657,7 +706,7 @@ class Integration(Settings):
             cols = self.universalDF.columns.values
 
             for col in tqdm(cols, desc="Columns Processed", unit=" Columns"):
-                self.universalDF[col] = self.universalDF[col].apply(self.convertUTC, args=[col])
+                self.universalDF[col] = self.universalDF[col].apply(self.toUTC, args=[col])
 
             self.setCPDF()
 
@@ -685,8 +734,14 @@ class Integration(Settings):
 
             self.makeParticipants(matchPPID=matchPPID)
 
-            # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
-            self.visitDF = self.universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
+            # # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
+            if "Visit Name" in cols:
+                self.visitDF = (
+                    self.universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
+                )
+
+            else:
+                self.visitDF = self.universalDF.dropna(subset=["Event Label"]).copy()
 
             #  getting all visit additional field form info and making a dict as above
             self.formExtensions = {
@@ -708,6 +763,7 @@ class Integration(Settings):
 
             self.recursiveSpecimens()
 
+            self.universalDF.to_csv(item, index=False)
             shutil.move(item, self.translatorOutputDir)
 
         self.isUniversal = False
@@ -809,7 +865,10 @@ class Integration(Settings):
 
             # Below is intended as a way to capture and write new Visit Names created when uploading data which excludes them
 
-            # if response and name is None:
+            if response and name is None:
+
+                filt = self.universalDF["PPID"] == ppid
+                self.universalDF.loc[filt, "Visit Name"] = response["name"]
 
             #     if self.isUniversal:
 
@@ -827,7 +886,7 @@ class Integration(Settings):
     #  still need to account for visit additional fields, and logging failures, etc.
     def uploadVisits(self):
 
-        inputItems = self.validateInputFiles("visits")
+        inputItems = self.validateInputFiles(self.uploadInputDir, "visits")
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
@@ -839,7 +898,7 @@ class Integration(Settings):
             cols = self.visitDF.columns.values
 
             for col in cols:
-                self.visitDF[col] = self.visitDF[col].apply(self.convertUTC, args=[col])
+                self.visitDF[col] = self.visitDF[col].apply(self.toUTC, args=[col])
 
             self.setCPDF()
 
@@ -954,7 +1013,7 @@ class Integration(Settings):
     def uploadSpecimens(self):
         #  TODO -- NEED TO ACCOUNT FOR USE OF SPECIMEN REQUIREMENT CODE?? cases of uploads without labels will go through Universal Upload I think..?
 
-        inputItems = self.validateInputFiles("specimens")
+        inputItems = self.validateInputFiles(self.uploadInputDir, "specimens")
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
@@ -966,7 +1025,7 @@ class Integration(Settings):
             cols = self.specimenDF.columns.values
 
             for col in cols:
-                self.specimenDF[col] = self.specimenDF[col].apply(self.convertUTC, args=[col])
+                self.specimenDF[col] = self.specimenDF[col].apply(self.toUTC, args=[col])
 
             self.setCPDF()
 
@@ -1262,8 +1321,8 @@ class Integration(Settings):
 
             name, length = data.get("Name"), data.get("Length (mm)")
             width, thickness = data.get("Width (mm)"), data.get("Thickness (mm)")
-            numberOfRows, rowLabelingScheme = data.get("Rows"), data.get("Row Labeling Scheme")
-            numberOfColumns, columnLabelingScheme = data.get("Columns"), data.get("Column Labeling Scheme")
+            numberOfRows, rowLabelingScheme = data.get("Rows"), data.get("Row Labeling Scheme").upper()
+            numberOfColumns, columnLabelingScheme = data.get("Columns"), data.get("Column Labeling Scheme").upper()
             coreDiameter, creationDate = data.get("Core Diameter (mm)"), data.get("Creation Date")
             status, qualityControl = data.get("Status"), data.get("Quality")
             comments = data.get("Comments")
@@ -1312,7 +1371,7 @@ class Integration(Settings):
 
     def uploadArrays(self, forcePending=False):
 
-        inputItems = self.validateInputFiles("arrays")
+        inputItems = self.validateInputFiles(self.uploadInputDir, "arrays")
 
         for item, env in zip(inputItems.keys(), inputItems.values()):
 
@@ -1322,7 +1381,7 @@ class Integration(Settings):
             cols = self.coreDF.columns.values
 
             for col in cols:
-                self.coreDF[col] = self.coreDF[col].apply(self.convertUTC, args=[col])
+                self.coreDF[col] = self.coreDF[col].apply(self.toUTC, args=[col])
 
             self.setCPDF()
 
@@ -1400,9 +1459,9 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
     #  a generic function for pulling files specific to a given function based on keyword and returning relevant info
-    def validateInputFiles(self, keyword):
+    def validateInputFiles(self, location, keyword):
 
-        inputItems = [item for item in os.listdir(self.uploadInputDir) if item.split("_")[0].lower() == keyword]
+        inputItems = [item for item in os.listdir(location) if item.split("_")[0].lower() == keyword]
         validatedItems = {}
 
         for item in inputItems:
@@ -1418,9 +1477,217 @@ class Integration(Settings):
                     "Upload file names must be in the following format: [Category]_[Environment Key]_[Additional Misc. Content].CSV"
                 )
 
-            validatedItems[self.uploadInputDir + item] = env
+            validatedItems[location + item] = env
 
         return validatedItems
+
+    #  ---------------------------------------------------------------------
+
+    def auditData(self, keyword, wantRandSample=False):
+
+        inputItems = self.validateInputFiles(self.auditInputDir, keyword.lower())
+
+        for item, env in zip(inputItems.keys(), inputItems.values()):
+
+            self.currentEnv = env
+            self.auditDF = pd.read_csv(item, dtype=str)
+            cols = self.auditDF.columns.values
+
+            self.setCPDF()
+
+            #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
+            cpIDs = self.auditDF["CP Short Title"].unique()
+            cpIDs = {
+                cpShortTitle: self.cpDF.loc[(self.cpDF["cpShortTitle"] == cpShortTitle), env]
+                .astype(int, errors="ignore")
+                .item()
+                for cpShortTitle in cpIDs
+            }
+
+            if keyword.lower() == "participants" or keyword.lower() == "universal":
+
+                comparedDF = pd.DataFrame(columns=cols)
+
+                participantSub = ["CP Short Title", "PPID", "First Name", "Last Name", "Middle Name", "Date Of Birth"]
+                self.participantDF = self.auditDF.drop_duplicates(subset=participantSub).copy()
+
+                dateList = ["Registration Date", "Date Of Birth", "Death Date"]
+
+                for col in dateList:
+
+                    self.participantDF[col] = self.participantDF[col].apply(self.padDates)
+
+                numRecords = len(self.participantDF.index)
+
+                if wantRandSample and numRecords > 30:
+
+                    checkInds = self.generateRandomSample(numRecords)
+                    filt = self.participantDF.index.isin(checkInds)
+                    self.participantAuditDF = self.participantDF.iloc[filt].copy()
+
+                else:
+                    self.participantAuditDF = self.participantDF.copy()
+
+                for ind, data in self.participantAuditDF.iterrows():
+
+                    data.sort_index(inplace=True)
+
+                    matchData = {
+                        "cpId": cpIDs[data["CP Short Title"]],
+                        "name": data["Last Name"],
+                        "ppid": data["PPID"],
+                        "birthDate": data["Date Of Birth"],
+                        "maxResults": 1,
+                        "exactMatch": True,
+                    }
+
+                    matchExtension = self.registerParticipantExtension + "list"
+                    response = self.postResponse(matchExtension, matchData)
+
+                    if response:
+
+                        matchExtension = self.registerParticipantExtension + str(response[0]["id"])
+                        participantData = self.getResponse(matchExtension)
+
+                        compareDict = {}
+
+                        # compareDict["SSN"] = participantData["participant"].get("")
+                        # compareDict["Email Address"] = participantData["participant"].get("")
+                        # compareDict["Reason"] = participantData.get("")
+
+                        compareDict["CP Short Title"] = participantData.get("cpShortTitle")
+                        compareDict["PPID"] = participantData.get("ppid")
+                        compareDict["Registration Date"] = self.fromUTC(participantData.get("registrationDate"))
+                        compareDict["Registration Site"] = participantData.get("site")
+                        compareDict["External Subject ID"] = participantData.get("externalSubjectId")
+                        compareDict["Activity Status"] = participantData.get("activityStatus")
+                        compareDict["First Name"] = participantData["participant"].get("firstName")
+                        compareDict["Last Name"] = participantData["participant"].get("lastName")
+                        compareDict["Middle Name"] = participantData["participant"].get("middleName")
+                        compareDict["Gender"] = participantData["participant"].get("gender")
+                        compareDict["Vital Status"] = participantData["participant"].get("vitalStatus")
+                        compareDict["eMPI"] = participantData["participant"].get("empi")
+
+                        #  would like to use fromUTC here, but kept getting: [Errno 22] Invalid argument
+                        dob = participantData["participant"].get("birthDateStr")
+                        dod = participantData["participant"].get("deathDateStr")
+
+                        if dob:
+                            dob = dob.split("-")
+                            dob = "/".join([dob[1], dob[2], dob[0]])
+
+                        if dod:
+                            dod = dod.split("-")
+                            dod = "/".join([dod[1], dod[2], dod[0]])
+
+                        compareDict["Date Of Birth"] = dob
+                        compareDict["Death Date"] = dod
+
+                        races = participantData["participant"].get("races")
+                        ethnicities = participantData["participant"].get("ethnicities")
+
+                        if races:
+                            for num, race in enumerate(races):
+                                compareDict[f"Race#{num+1}"] = race
+
+                        if ethnicities:
+                            for num, ethnicity in enumerate(ethnicities):
+                                compareDict[f"Ethnicity#{num+1}"] = ethnicity
+
+                        pmis = participantData["participant"].get("pmis")
+
+                        if pmis:
+                            for num, pmi in enumerate(pmis):
+                                compareDict[f"PMI#{num+1}#Site Name"] = pmi["siteName"]
+                                compareDict[f"PMI#{num+1}#MRN"] = pmi["mrn"]
+
+                        if participantData["participant"].get("extensionDetail") is not None:
+
+                            pafForm = participantData["participant"]["extensionDetail"]["formCaption"]
+
+                            pafVals = participantData["participant"]["extensionDetail"]["attrs"]
+                            pafDict = {}
+
+                            for field in pafVals:
+
+                                if "SF" not in field["name"]:
+                                    pafDict[f"{pafForm}#{field['caption']}"] = field["value"]
+
+                                else:
+
+                                    for num, val in enumerate(field["value"]):
+
+                                        for subField in val:
+
+                                            key = f"{pafForm}#{field['caption']}#{num}#{subField['caption']}"
+                                            pafDict[key] = subField["value"]
+
+                            compareDict.update(pafDict)
+
+                        for col in cols:
+                            if col not in compareDict.keys():
+                                compareDict[col] = None
+
+                        compareSeries = pd.Series(compareDict)
+                        compareSeries.sort_index(inplace=True)
+                        compared = data.compare(compareSeries).T
+                        compared.insert(0, "PPID", compareDict["PPID"])
+                        comparedDF = comparedDF.append(compared)
+
+                    else:
+                        comparedDF.append(data)
+                        filt = "PPID" == data["PPID"]
+                        comparedDF.loc[filt, "Identifier"] = "Record for this participant not found in OpS"
+
+                comparedDF.dropna(axis=1, how="all", inplace=True)
+                comparedDF.to_csv(f"./output/audited_{' '.join(item.split('_')[1:])}", index=False)
+
+            # if keyword.lower() == "visits" or keyword.lower() == "universal":
+
+            #     self.visitDF = self.auditDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
+
+            #     numRecords = len(self.visitDF.index)
+
+            #     if numRecords > 30:
+
+            #         checkInds = self.generateRandomSample(numRecords)
+
+            #         filt = self.visitDF.index.isin(checkInds)
+            #         self.visitAuditDF = self.visitDF.iloc[filt].copy()
+
+            #     else:
+            #         self.visitAuditDF = self.visitDF.copy()
+
+            # if keyword.lower() == "specimens" or keyword.lower() == "universal":
+
+            #     self.specimenDF = (
+            #         self.auditDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"]).copy()
+            #     )
+
+            #     numRecords = len(self.specimenDF.index)
+
+            #     if numRecords > 30:
+
+            #         checkInds = self.generateRandomSample(numRecords)
+
+            #         filt = self.specimenDF.index.isin(checkInds)
+            #         self.specimenAuditDF = self.specimenDF.iloc[filt].copy()
+
+            #     else:
+            #         self.specimenAuditDF = self.specimenDF.copy()
+
+    #  ---------------------------------------------------------------------
+
+    def generateRandomSample(self, numRecords):
+
+        if numRecords <= 100:
+            checkNum = int(numRecords * 0.33)
+
+        elif numRecords > 100:
+            checkNum = int(numRecords * 0.1)
+
+        checkInds = random.sample(range(numRecords), checkNum)
+        return checkInds
 
     #  ---------------------------------------------------------------------
 
@@ -1632,7 +1899,11 @@ class Integration(Settings):
 
                     extension = f"{self.formExtension}{int(val)}/true"
                     fieldList = self.getResponse(extension)
-                    fieldList = fieldList["controlCollection"][:]
+
+                    try:
+                        fieldList = fieldList["controlCollection"][:]
+                    except:
+                        continue
 
                     for fieldItem in fieldList:
 
@@ -2149,6 +2420,3 @@ class Integration(Settings):
                 inplace=True,
             )
             self.formDF.to_csv(self.formOutPath, index=False)
-
-    #  ---------------------------------------------------------------------
-
