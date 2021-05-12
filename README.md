@@ -187,9 +187,17 @@ This library is designed to help overcome various points of friction discovered 
   - Creates the Extension object, populates it with data, and passes it to be uploaded. Extension Details are things like Participant/Visit/Specimen Additional Fields, and Event Fields
   - **formExten**: A dictionary structured like `{"formId": formId, "formName": formName}`
   - **data**: The data used to create the Extension object
-- `Integration.validateInputFiles(keyword)`
+- `Integration.validateInputFiles(location, keyword)`
   - Pulls file paths for all the files in the Input folder which contain a given keyword
+  - **location**: Path to the folder or file that is to be examined
   - **keyword**: The search term
+- `Integration.auditData(keyword, wantRandSample=False)`
+  - Audits data in the audit folder by comparing against what is already in OpS. Operates on .CSVs with a keyword in their name, and outputs a .CSV which logs and discrepancies
+  - **keyword**: The search term
+  - **wantRandSample**: Set true if only a random sample of the data in the provided .CSVs should be audited. For record sets of 30 or fewer entries, all 30 will be audited. For record sets of greater than 30, but fewer than 100 entries, 33% will be audited. For record sets of greater than 100 entries, 10% will be audited.
+- `Integration.generateRandomSample(numRecords)`
+  - Generates a list of random numbers representing either 33% of numRecords, or 10%, if numRecords is less than or equal to 100, or greater than 100, respectively
+  - **numRecords**: Integer value representing the total number of records available
 - `Integration.setCPDF(envs=None)`
   - Sets the Collection Protocol Dataframe if the .csv exists, or builds a new copy by calling `syncWorkflowList(wantDF=True)`
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
