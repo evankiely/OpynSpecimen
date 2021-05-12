@@ -489,9 +489,6 @@ class Integration(Settings):
             ppid, registrationDate = data.get("PPID"), data.get("Registration Date")
             idVal = None
 
-            if firstName == "Generic":
-                ppid = "667-266"
-
             #  rather than structuring them as nested dicts, just pass them to an object and let jsonPickle handle the rest
 
             participant = Registration(
