@@ -253,7 +253,7 @@ This library is designed to help overcome various points of friction discovered 
   - **AQL**: The actual query to run. For more information on how to write/structure AQL see [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/110264471/How%2Bto%2Bdesign%2Band%2Brun%2Bqueries%2Bprogrammatically%2Busing%2BAQL) and [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/72024115/Calculated%2Bfields%2BTemporal%2BQueries). It is also possible to inspect the AQL of queries defined in the GUI by watching the network calls, which allows you to avoid, mostly, learning the AQL syntax
 
 #### Upload Classes
-- See the entry under [Core Functionality](https://github.com/evankiely/OpynSpecimen/blob/main/README.md#core-functionality) for more information. These objects largely store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
+- See the entry under [Core Functionality](https://github.com/evankiely/OpynSpecimen/blob/main/README.md#core-functionality) for more information. These objects mostly used to store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
 
 ## License
 This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/evankiely/OpynSpecimen/blob/main/LICENSE). For more permissive licensing in the case of commercial usage, please contact the [Office of Technology Transfer](http://www.ott.emory.edu/) at Emory University, and reference TechID 21074
