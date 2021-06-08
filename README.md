@@ -1,5 +1,5 @@
 # OpynSpecimen
-### An object oriented wrapper and additional tooling for the OpenSpecimen API, written in Python
+### An object oriented wrapper and tooling for the OpenSpecimen API, written in Python
 
 ![GitHub](https://img.shields.io/github/license/evankiely/OpynSpecimen?label=license) ![GitHub stars](https://img.shields.io/github/stars/evankiely/OpynSpecimen) ![GitHub issues](https://img.shields.io/github/issues/evankiely/OpynSpecimen)
 
