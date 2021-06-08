@@ -6,7 +6,7 @@ An object oriented wrapper and additional tooling for the OpenSpecimen API, writ
 ## Introduction
 This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
-**Note**: OpenSpecimen v8 changed some details of the forms/fields api (namely, the JSON formatting), so be sure to select the folder which matches your version of OpS. This change also renders the Translator object obsolete, so long as you have never used OpS prior to v8, *and* forms/fields are named consistently across environments. You can find the version number by selecting the "i" to the left of the "Sign In" button on the landing page, or by selecting the "?" next to the notification icon, then selecting the "About OpenSpecimen" option, after logging in.
+**Note**: OpenSpecimen v8 changed some details of the forms/fields api (namely, the JSON formatting), so be sure to select the folder which matches your version of OpS (v8 code should work with v7, though v7 will not work with v8). This change also renders the Translator object obsolete, so long as you have never used OpS prior to v8, *and* forms/fields are named consistently across environments. You can find the version number by selecting the "i" to the left of the "Sign In" button on the landing page, or by selecting the "?" next to the notification icon, then selecting the "About OpenSpecimen" option, after logging in.
 
 ## Getting Started
 
