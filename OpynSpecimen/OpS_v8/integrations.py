@@ -1899,6 +1899,7 @@ class Integration(Settings):
 
                     fieldList = fieldList["rows"]
                     #  nested list comprehension pulls rows from fieldList, then the items for that row, and unifies all into a single list
+                    #  can be understood as: for row in fieldList, for item in row, item
                     fieldList = [item for row in fieldList for item in row]
 
                     for fieldItem in fieldList:
@@ -2100,7 +2101,7 @@ class Integration(Settings):
 
             self.currentEnv = env
 
-            #  Allows sync of group and cp level workflows with the same function
+            #  Allows sync of group and cp level workflows with the same function -- see settings for more details
             for reqVals in self.workflowListDetails:
 
                 initialDict = self.getResponse(reqVals["listExtension"], reqVals["params"])
@@ -2112,6 +2113,7 @@ class Integration(Settings):
                     cpID = cp["id"]
 
                     if cp[shortTitleKey] in self.cpDF["cpShortTitle"].values:
+
                         filt = self.cpDF["cpShortTitle"] == cp[shortTitleKey]
 
                         if pd.isna(self.cpDF.loc[filt, env].item()) or self.cpDF.loc[filt, env].item() != cpID:
@@ -2120,9 +2122,9 @@ class Integration(Settings):
                             if shortTitleKey != "name":
 
                                 extension = self.cpWorkflowExtension.replace("_", str(cpID))
-
                                 workflow = self.getResponse(extension)
 
+                                #  if 0, no need to keep a record
                                 if len(workflow["workflows"]) != 0:
 
                                     #  removing / because it can interfere with file pathing on save
@@ -2135,7 +2137,6 @@ class Integration(Settings):
                             else:
 
                                 extension = self.groupWorkflowExtension.replace("_", str(cpID))
-
                                 workflow = self.getResponse(extension)
 
                                 with open(
@@ -2150,7 +2151,6 @@ class Integration(Settings):
 
                             cpTitle = "N/A -- Group Workflow"
                             extension = self.groupWorkflowExtension.replace("_", str(cpID))
-
                             workflow = self.getResponse(extension)
 
                             with open(
@@ -2163,9 +2163,9 @@ class Integration(Settings):
 
                             cpTitle = cp["title"]
                             extension = self.cpWorkflowExtension.replace("_", str(cpID))
-
                             workflow = self.getResponse(extension)
 
+                            #  if 0, no need to keep a record
                             if len(workflow["workflows"]) != 0:
 
                                 #  removing / because it can interfere with file pathing on save
@@ -2420,5 +2420,19 @@ class Integration(Settings):
                 inplace=True,
             )
             self.formDF.to_csv(self.formOutPath, index=False)
+
+    #  ---------------------------------------------------------------------
+
+    def runQuery(self, env, cpID, AQL):
+
+        self.currentEnv = env
+
+        data = {
+            "cpId": cpID,
+            "aql": AQL,
+        }
+
+        response = self.postResponse(self.queryExtension, data)
+        return response
 
     #  ---------------------------------------------------------------------
