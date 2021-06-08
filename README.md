@@ -1,7 +1,7 @@
 # OpynSpecimen
 ### An object oriented wrapper and additional tooling for the OpenSpecimen API, written in Python
 
-![GitHub](https://img.shields.io/github/license/evankiely/OpynSpecimen) ![GitHub all releases](https://img.shields.io/github/downloads/evankiely/OpynSpecimen/total)
+![GitHub](https://img.shields.io/github/license/evankiely/OpynSpecimen?label=license) ![GitHub stars](https://img.shields.io/github/stars/evankiely/OpynSpecimen) ![GitHub issues](https://img.shields.io/github/issues/evankiely/OpynSpecimen)
 
 ## Introduction
 This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
