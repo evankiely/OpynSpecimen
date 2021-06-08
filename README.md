@@ -246,6 +246,11 @@ This library is designed to help overcome various points of friction discovered 
 - `Integration.updateForms(envs=None)`
   - Updates Forms and Fields Dataframes, including removing any that are no longer in use
   - **envs**: A list of the environments these actions should be done for/applied to. If `None`, default is to use all specified in Settings.envs
+- `Integration.runQuery(env, cpID, AQL)`
+  - Runs a query and returns results according to parameters defined in AQL
+  - **env**: The env to run the query in/against
+  - **cpID**: The internal reference code of the CP to query against. Set as -1 to run against all records (i.e. all CPs). Not technically necessary if CP is specified in AQL, but function requires it even if specified in AQL
+  - **AQL**: The actual query to run. For more information on how to write/structure AQL see [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/110264471/How%2Bto%2Bdesign%2Band%2Brun%2Bqueries%2Bprogrammatically%2Busing%2BAQL) and [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/72024115/Calculated%2Bfields%2BTemporal%2BQueries). It is also possible to inspect the AQL of queries defined in the GUI by watching the network calls, which allows you to avoid, mostly, learning the AQL syntax
 
 #### Upload Classes
 - See the entry under [Core Functionality](https://github.com/evankiely/OpynSpecimen/blob/main/README.md#core-functionality) for more information. These objects largely store data you're uploading, so there isn't much to discuss here, since these are just intended to be used as scaffolding
