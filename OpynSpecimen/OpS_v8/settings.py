@@ -1,7 +1,5 @@
 import os
 
-import requests
-
 
 class Settings:
     def __init__(self):
@@ -80,7 +78,7 @@ class Settings:
         self.requiredPaths = [
             "./resources",
             "./dropdowns",
-            "./audit",
+            self.auditInputDir,
             self.translatorInputDir,
             self.uploadInputDir,
             self.translatorOutputDir,
@@ -113,6 +111,7 @@ class Settings:
         self.aliquotExtension = "specimens/collect"
         self.arrayExtension = "specimen-arrays/"
         self.coreExtension = "specimen-arrays/_/cores"  # where _ is {arrayDetails['id']}
+        self.queryExtension = "query"
 
         self.setBlankCode = "##set_to_blank##"
 
