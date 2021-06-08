@@ -42,7 +42,7 @@ This library is designed to help overcome various points of friction discovered 
   - The intent is to remove the need for users to change things in the core functions of the Translator and Integration objects
   - The content of this class should remain mostly static, since it consists primarily of details of the OpenSpecimen API. The few things that you will need/want to customize are discussed below
 - The **Translator** class enables easy, human in the loop transitioning of Collection Protocol Workflows between environments, and a generic Diff Report function to compare Workflows
- - **Note**: This class is no longer necessary as of v8, so long as you've never used an earlier version of OpS (or have since started fresh with v8) and forms/fields are named consistenly across environments
+  - **Note**: This class is no longer necessary as of v8, so long as you've never used an earlier version of OpS (or have since started fresh with v8) and forms/fields are named consistenly across environments
 - The **Integration** class provides a robust suite of functions to interface with the OpenSpecimen API, with upload capabilities for all OpenSpecimen provided templates, as well as custom implimentations for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document based upload, in addition to Arrays, Cores, and more.
   - It is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
 - The **Upload Classes** are a set of Python objects that are used to organize and store information before being serialized to JSON and passed to the API
