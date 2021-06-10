@@ -31,6 +31,9 @@ This library is designed to help overcome various points of friction discovered 
 
 ## Documentation
 
+### API Endpoints
+ - See knownEndpoints.py (in the OpynSpecimen folder) for a set of endpoints I have used/discovered while putting this together. For Krishagni's documentation, [see here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1116035/REST+APIs)
+
 ### Core Classes
 - **Settings**
 - **Translator**
