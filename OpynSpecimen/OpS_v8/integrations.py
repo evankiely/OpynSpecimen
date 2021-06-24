@@ -31,7 +31,6 @@ class Integration(Settings):
     #  ---------------------------------------------------------------------
 
     def renewTokens(self):
-
         self.authTokens = self.getTokens()
 
     #  ---------------------------------------------------------------------
@@ -40,7 +39,7 @@ class Integration(Settings):
 
         authTokens = {}
 
-        for env, data in zip(self.envs.keys(), self.envs.values()):
+        for env, data in self.envs.items():
 
             if env == "prod":
                 url = self.baseURL.replace("_", "") + self.authExtension
@@ -92,7 +91,7 @@ class Integration(Settings):
         elif not response.ok:
             response.raise_for_status()
 
-        #  changed from 0 because .text turns an empty list into a string --> "[]" which returns 2 when len applied
+        #  .text turns an empty list into "[]" which returns 2 when len applied
         if len(response.text) <= 2:
             return None
 
@@ -191,7 +190,7 @@ class Integration(Settings):
             return response
 
     #  ---------------------------------------------------------------------
-    #  TESTED WITH ONLY SMALL SAMPLE OF SPECIMENS AS OF 3/11 -- should enable standard bulk uploads as per the gui
+    #  should enable standard bulk uploads as per the gui -- TESTED WITH ONLY SMALL SAMPLE OF SPECIMENS AS OF 03/11/2021
     def genericBulkUpload(self, importType="CREATE", checkStatus=False):
 
         inputItems = [item for item in os.listdir(self.uploadInputDir) if item.split("_")[0].lower() == "genericbulk"]
@@ -300,8 +299,8 @@ class Integration(Settings):
 
             shutil.move(inputItemLoc, self.translatorOutputDir)
 
-    #  ---------------------------------------------------------------------  Should look into including args in functions being passed into .apply so this can be combined with below "ForAPI"
-    #  combine these date cleaning functions with forBulk or forAPI flags to change the ordering -- need to figure out how to pass args/kwargs to pd.apply()
+    #  ---------------------------------------------------------------------
+    #  combine these date cleaning functions with forBulk or forAPI flags to change the ordering -- pass args/kwargs to pd.apply()
     def cleanDateForBulk(self, date):
 
         if pd.isna(date):
@@ -454,7 +453,7 @@ class Integration(Settings):
             if formExten:
                 exten = self.buildExtensionDetail(formExten, data)
 
-                #  now we define all the remaining variables
+            #  now we define all the remaining variables
             data = {col: (data[col] if pd.notna(data[col]) else None) for col in cols}
 
             #  putting mrn sites and vals into lists
@@ -489,7 +488,7 @@ class Integration(Settings):
             ppid, registrationDate = data.get("PPID"), data.get("Registration Date")
             idVal = None
 
-            #  rather than structuring them as nested dicts, just pass them to an object and let jsonPickle handle the rest
+            #  rather than structuring them as nested dicts, just pass them into an object and let jsonPickle handle the rest
 
             participant = Registration(
                 Participant(
@@ -544,11 +543,11 @@ class Integration(Settings):
                     response = self.postResponse(extension, participant, method="PUT")
 
                 #  otherwise, since they exist in some other cp, do it as register existing participant to new cp
-                #  matchPPID allows the function to look for cases where PPID matches to a participant in the CP, even though the MRN/EMPI was absent/failed to match
+                #  matchPPID allows the function to look for cases where PPID matches to a participant in the CP, even if the MRN/EMPI was absent/failed to match
                 else:
                     response = self.postResponse(extension, participant, matchPPID=matchPPID)
 
-            #  finally, if they don't exist in openspecimen at all, just make them a new profile, unless their activity status is disabled, in which case no need
+            # finally, if they don't exist in openspecimen at all, just make them a new profile, unless their activity status is disabled, in which case no need
             # elif activityStatus is None or activityStatus.lower() != "disabled":
             else:
                 response = self.postResponse(extension, participant, matchPPID=matchPPID)
@@ -585,18 +584,18 @@ class Integration(Settings):
         #  it will appear to OpS as if there is a profile with that PPID already, and which is independent of the info being uploaded, since the profile failed to match on PMIs/empi
         #  so matchPPID attempts to get the CP level ID for the profile in order to modify it with the new data, including linking them with the system level IDs
         #  in this implimentation, we narrow our pool of matches to only profiles in the CP of interest, then pass the PPID (with the exactMatch flag set to true), as well as last name and date of birth
-        #  it is possible to pass other values, like registration date (but this is potentially variable vs. DOB), participantID (which is what is missing from the profile in the first place, so not useful here),
-        #  and specimen level info, like strings that can be matched against specimen labels, or subsections thereof, but we forego that here
+        #  it is possible to pass other values, like registration date (but this is potentially variable vs. DOB), and participantID (which is what is missing from the profile in the first place, so not useful here)
         #
-        #  note that this is distinct from the matchParticipants function above, as that uses a system-wide id (like PMI/mrn or empi) to identify that high level participant profile with certainty, while
+        #  note that this is distinct from the matchParticipants function, which uses a system-wide id (like PMI/mrn or empi) to identify that high level participant profile with certainty.
         #  this implementation is specific to a particular CP
         #
         #  TODO: change dict indexing from .get() when the value is required or check required to make sure they're not None and raise error if they are
-        #  if a participant matches, check their details -- if all details match what is to be uploaded, no need to do anything and can skip to the next person
+        #  TODO: add criticalCols/criticalErrors check, as in auditData function, if above todo is insufficient
+        #  TODO: if a participant matches, check their details -- if all details match what is to be uploaded, no need to do anything and can skip to the next person
 
         inputItems = self.validateInputFiles(self.uploadInputDir, "participants")
 
-        for item, env in zip(inputItems.keys(), inputItems.values()):
+        for item, env in inputItems.items():
 
             self.currentEnv = env
 
@@ -621,7 +620,7 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             self.formExtensions = {
                 cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+                for cpShortTitle, cpId in cpIDs.items()
             }
 
             self.makeParticipants(matchPPID=matchPPID)
@@ -653,7 +652,7 @@ class Integration(Settings):
                 except:
                     dt = datetime.strptime(data, self.dateFormat)
 
-        # considered returning filler date if birth or death in col, but probably best not to
+        # considered returning filler date even if birth or death in col, but probably best not to
         elif True in isDTCol[:1] and "death" not in col.lower() and "birth" not in col.lower():
             dt = datetime.strptime(self.fillerDate, self.dateFormat)
 
@@ -682,17 +681,12 @@ class Integration(Settings):
 
     def universalUpload(self, matchPPID=False):
 
-        #  break file ingest out of all upload functions and into its own thing -- return clean and prepped df (validate against permissible values, etc.)
-        #  then modify the upload functions take in a df so that they can be strung together and fed dfs with the requisite info
-
-        #  pull out participants, make them, and have a new set of records for them corresponding to info in the main df
-        #  pull out visits and reference against the new participant info df to avoid looking stuff up (aside from if the visit already exists, etc.), and save new info
-        #  repeat for specimens
+        # TODO: add criticalCols/criticalErrors check, as in auditData function
 
         self.isUniversal = True
         inputItems = self.validateInputFiles(self.uploadInputDir, "universal")
 
-        for item, env in zip(inputItems.keys(), inputItems.values()):
+        for item, env in inputItems.items():
 
             self.currentEnv = env
             self.currentItem = item
@@ -715,8 +709,7 @@ class Integration(Settings):
                 for cpShortTitle in cpIDs
             }
 
-            #  NOTE: also drop any irrelevant specimen/visit columns to reduce redundant processing, etc. and do so for all the below
-            #  , "PMI#1#Site Name", "PMI#1#MRN"
+            #  NOTE: also drop any irrelevant specimen/visit columns to reduce redundant processing, memory consumption, etc.?
 
             participantSub = ["CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"]
 
@@ -725,12 +718,11 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             self.formExtensions = {
                 cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+                for cpShortTitle, cpId in cpIDs.items()
             }
 
             self.makeParticipants(matchPPID=matchPPID)
 
-            # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
             if "Visit Name" in cols:
                 self.visitDF = (
                     self.universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
@@ -742,7 +734,7 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             self.formExtensions = {
                 cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+                for cpShortTitle, cpId in cpIDs.items()
             }
 
             self.makeVisits()
@@ -754,7 +746,7 @@ class Integration(Settings):
             #  getting all specimen additional field form info and making a dict as above
             self.formExtensions = {
                 cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+                for cpShortTitle, cpId in cpIDs.items()
             }
 
             self.recursiveSpecimens()
@@ -791,7 +783,7 @@ class Integration(Settings):
             if formExten:
                 extensionDetail = self.buildExtensionDetail(formExten, data)
 
-            #  since it's required for specimen class, and attrsMap defaults to an empty dict, go ahead and make an empty instance
+            #  since it's required for specimen class, and attrsMap defaults to an empty dict, go ahead and make an empty Extension instance
             else:
                 extensionDetail = Extension()
 
@@ -881,12 +873,12 @@ class Integration(Settings):
                 )
 
     #  ---------------------------------------------------------------------
-    #  still need to account for visit additional fields, and logging failures, etc.
+    #  still need to account for logging failures, etc.
     def uploadVisits(self):
 
         inputItems = self.validateInputFiles(self.uploadInputDir, "visits")
 
-        for item, env in zip(inputItems.keys(), inputItems.values()):
+        for item, env in inputItems.items():
 
             self.currentEnv = env
             self.currentItem = item
@@ -910,7 +902,7 @@ class Integration(Settings):
             #  getting all visit additional field form info and making a dict as above
             self.formExtensions = {
                 cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+                for cpShortTitle, cpId in cpIDs.items()
             }
 
             self.makeVisits()
@@ -1020,11 +1012,11 @@ class Integration(Settings):
     #  ---------------------------------------------------------------------
 
     def uploadSpecimens(self):
-        #  TODO -- NEED TO ACCOUNT FOR USE OF SPECIMEN REQUIREMENT CODE?? cases of uploads without labels will go through Universal Upload I think..?
+        #  TODO -- NEED TO ACCOUNT FOR USE OF SPECIMEN REQUIREMENT CODE (here and in universal, or in both by fitting it into recursiveSpecimens somehow)
 
         inputItems = self.validateInputFiles(self.uploadInputDir, "specimens")
 
-        for item, env in zip(inputItems.keys(), inputItems.values()):
+        for item, env in inputItems.items():
 
             self.currentEnv = env
             self.currentItem = item
@@ -1048,7 +1040,7 @@ class Integration(Settings):
             #  getting all specimen additional field form info and making a dict as above
             self.formExtensions = {
                 cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in zip(cpIDs.keys(), cpIDs.values())
+                for cpShortTitle, cpId in cpIDs.items()
             }
 
             self.recursiveSpecimens()
@@ -1064,7 +1056,7 @@ class Integration(Settings):
         if formExten:
             extensionDetail = self.buildExtensionDetail(formExten, data)
 
-        #  since it's required for specimen class, and attrsMap defaults to an empty dict, go ahead and make an empty instance
+        #  since it's required for specimen class, and attrsMap defaults to an empty dict, go ahead and make an empty Extension instance
         else:
             extensionDetail = Extension()
 
@@ -1097,12 +1089,8 @@ class Integration(Settings):
                 "positionY": data.get("Location#Column"),
             }
 
-        #  dealing with pandas converting mixed int and Nones to floats again...
-        storageLocation = {
-            key: int(val)
-            for key, val in zip(storageLocation.keys(), storageLocation.values())
-            if isinstance(val, float)
-        }
+        #  dealing with pandas converting mixed int and Nones to floats again... TODO: instead, use .astype() above when sourcing the vals, combined with .notna() to avoid errors cause by failure to cast type
+        storageLocation = {key: int(val) for key, val in storageLocation.items() if isinstance(val, float)}
 
         if referenceSpec.get("Matched"):
 
@@ -1382,7 +1370,7 @@ class Integration(Settings):
 
         inputItems = self.validateInputFiles(self.uploadInputDir, "arrays")
 
-        for item, env in zip(inputItems.keys(), inputItems.values()):
+        for item, env in inputItems.items():
 
             self.currentEnv = env
             self.coreDF = pd.read_csv(item, dtype=str)
@@ -1451,7 +1439,7 @@ class Integration(Settings):
                 elif attrsDict[parentVal][instanceKey].get(keyVal) is None:
                     attrsDict[parentVal][instanceKey][keyVal] = data
 
-        for key, val in zip(attrsDict.keys(), attrsDict.values()):
+        for key, val in attrsDict.items():
 
             if isinstance(val, dict):
                 attrsDict[key] = [subFields for subFields in attrsDict[key].values()]
@@ -1611,7 +1599,6 @@ class Integration(Settings):
                         compareDict["Vital Status"] = participantData["participant"].get("vitalStatus")
                         compareDict["eMPI"] = participantData["participant"].get("empi")
 
-                        #  would like to use fromUTC here, but kept getting: [Errno 22] Invalid argument
                         dob = participantData["participant"].get("birthDateStr")
                         dod = participantData["participant"].get("deathDateStr")
 
@@ -1676,7 +1663,7 @@ class Integration(Settings):
                         compareSeries = pd.Series(compareDict)
                         compareSeries.sort_index(inplace=True)
 
-                        # below in case fields changed around the provided records between upload and audit, in which case there would be additional columns in compareSeries
+                        # below in case form fields changed between upload and audit, in which case there may be be additional columns in compareSeries
                         extras = [item for item in compareSeries.index.values if item not in data.index.values]
                         compareSeries.drop(index=extras, inplace=True)
 
@@ -1927,7 +1914,7 @@ class Integration(Settings):
             self.fieldDF = self.syncFieldList(envs, wantDF=True)
 
     #  ---------------------------------------------------------------------
-    #  generates a dataframe of all fields and subfields associated with the forms in the dataframe generated by syncFormList, as well as their internal reference codes
+    #  generates a dataframe of all fields and subfields, as well as their internal reference codes, associated with the forms in the dataframe generated by syncFormList
     def syncFieldList(self, envs=None, wantDF=False):
 
         self.setFormDF()
@@ -1958,6 +1945,7 @@ class Integration(Settings):
                     fieldList = fieldList["rows"]
                     #  nested list comprehension pulls rows from fieldList, then the items for that row, and unifies all into a single list
                     #  can be understood as: for row in fieldList, for item in row, item
+                    #  or item for item in row for row in fieldList
                     fieldList = [item for row in fieldList for item in row]
 
                     for fieldItem in fieldList:
@@ -2266,7 +2254,7 @@ class Integration(Settings):
                             if os.path.exists(workflowLocation):
                                 os.remove(workflowLocation)
 
-            #  Removing all rows that have None vals for all Envs (i.e. don't exist anywhere)
+        #  Removing all rows that have None vals for all Envs (i.e. don't exist anywhere)
         self.cpDF.dropna(how="all", subset=[env for env in self.envs.keys()], inplace=True)
         self.cpDF.to_csv(self.cpOutPath, index=False)
 
