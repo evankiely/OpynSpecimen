@@ -553,28 +553,27 @@ class Integration(Settings):
             else:
                 response = self.postResponse(extension, participant, matchPPID=matchPPID)
 
-            if response and ppid is None:
-                filt = (
-                    (self.universalDF["First Name"] == firstName)
-                    & (self.universalDF["Last Name"] == lastName)
-                    & (self.universalDF["Registration Date"] == registrationDate)
-                )
-                self.universalDF.loc[filt, "PPID"] = response["ppid"]
-
             # Below is intended as a way to capture and write new PPIDs created when uploading data which excludes them
-            # Currently leaving isUniversal as filter because the participantUpload function hasn't been updated similarly
+            if response and ppid is None:
 
-            # if self.isUniversal and response and data.get("PPID") is None:
+                # included for universal separately since it could continue on to making specimens, and visit name is critical info for that
+                if self.isUniversal:
+                    filt = (
+                        (self.universalDF["First Name"] == firstName)
+                        & (self.universalDF["Last Name"] == lastName)
+                        & (self.universalDF["Registration Date"] == registrationDate)
+                    )
+                    self.universalDF.loc[filt, "PPID"] = response["ppid"]
 
-            #     filt = (
-            #         (self.universalDF["First Name"] == firstName)
-            #         & (self.universalDF["Last Name"] == lastName)
-            #         & (self.universalDF["Date Of Birth"] == birthDate)
-            #     )
-
-            #     self.universalDF.loc[filt, "PPID"] = response["ppid"]
-            #     self.universalUpdated.loc[filt, "PPID"] = response["ppid"]
-            #     self.universalUpdated.to_csv(self.currentItem, index=False)
+                filt = (
+                    (self.recordDF["First Name"] == firstName)
+                    & (self.recordDF["Last Name"] == lastName)
+                    & (self.recordDF["Registration Date"] == registrationDate)
+                )
+                self.recordDF.loc[filt, "PPID"] = response["ppid"]
+                self.recordDF.to_csv(
+                    f"{self.translatorOutputDir}/records_{' '.join(self.currentItem.split('_')[1:])}", index=False
+                )
 
     #  ---------------------------------------------------------------------
     #  This is a confusing function because OpS relies very heavily on generic attribute names. In this case, what is meant by "id" in the docs varies by context
@@ -698,7 +697,7 @@ class Integration(Settings):
             self.currentEnv = env
             self.currentItem = item
             self.universalDF = pd.read_csv(item, dtype=str)
-            self.universalUpdated = self.universalDF.copy()
+            self.recordDF = self.universalDF.copy()
 
             cols = self.universalDF.columns.values
 
@@ -731,7 +730,7 @@ class Integration(Settings):
 
             self.makeParticipants(matchPPID=matchPPID)
 
-            # # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
+            # multiple people may have the same visit name in rare cases --> , "CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"
             if "Visit Name" in cols:
                 self.visitDF = (
                     self.universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
@@ -760,7 +759,6 @@ class Integration(Settings):
 
             self.recursiveSpecimens()
 
-            self.universalDF.to_csv(item, index=False)
             shutil.move(item, self.translatorOutputDir)
 
         self.isUniversal = False
@@ -860,24 +858,27 @@ class Integration(Settings):
                 extension = self.visitExtension.replace("_", "")
                 response = self.postResponse(extension, visit)
 
-            # Below is intended as a way to capture and write new Visit Names created when uploading data which excludes them
-
+            # Below captures and writes new Visit Names created when uploading data which excludes them
             if response and name is None:
 
-                filt = self.universalDF["PPID"] == ppid
-                self.universalDF.loc[filt, "Visit Name"] = response["name"]
+                # included for universal separately since it could continue on to making specimens, and visit name is critical info for that
+                if self.isUniversal:
+                    filt = (
+                        (self.universalDF["PPID"] == ppid)
+                        & (self.universalDF["Event Label"] == eventLabel)
+                        & (self.universalDF["Visit Date"] == visitDate)
+                    )
+                    self.universalDF.loc[filt, "Visit Name"] = response["name"]
 
-            #     if self.isUniversal:
-
-            #         self.universalDF.loc[ind, "Visit Name"] = response["name"]
-            #         self.universalUpdated.loc[ind, "Visit Name"] = response["name"]
-            #         self.universalUpdated.to_csv(self.currentItem, index=False)
-
-            #     else:
-
-            #         self.visitDF.loc[ind, "Visit Name"] = response["name"]
-            #         self.visitUpdated.loc[ind, "Visit Name"] = response["name"]
-            #         self.visitUpdated.to_csv(self.currentItem, index=False)
+                filt = (
+                    (self.recordDF["PPID"] == ppid)
+                    & (self.recordDF["Event Label"] == eventLabel)
+                    & (self.recordDF["Visit Date"] == visitDate)
+                )
+                self.recordDF.loc[filt, "Visit Name"] = response["name"]
+                self.recordDF.to_csv(
+                    f"{self.translatorOutputDir}/records_{' '.join(self.currentItem.split('_')[1:])}", index=False
+                )
 
     #  ---------------------------------------------------------------------
     #  still need to account for visit additional fields, and logging failures, etc.
@@ -890,7 +891,7 @@ class Integration(Settings):
             self.currentEnv = env
             self.currentItem = item
             self.visitDF = pd.read_csv(item, dtype=str)
-            self.visitUpdated = self.visitDF.copy()
+            self.recordDF = self.visitDF.copy()
 
             cols = self.visitDF.columns.values
 
@@ -920,7 +921,7 @@ class Integration(Settings):
 
     def recursiveSpecimens(self, parentSpecimen=None):
 
-        #  simple way of avoiding dealing with lists of aliquots for now, since they're unlikely to actually be parent of anything in the near term
+        #  simple way of avoiding dealing with lists of aliquots for now, since there is unlikely to actually be a case where an aliquot is the parent of anything in the near term
         if isinstance(parentSpecimen, list):
             return
 
@@ -929,21 +930,23 @@ class Integration(Settings):
                 self.specimenDF["Lineage"].str.lower() != "new"
             )
 
-        # NOTE -- leaving out a whole class of specimens that have a label but no parent label because they already exist in OpS
-
+        # if no parentSpecimen provided, find all parents and start with them
         else:
             filt = (self.specimenDF["Parent Specimen Label"].isnull()) & (
                 self.specimenDF["Lineage"].str.lower() == "new"
             )
 
         if self.specimenDF.loc[filt].empty:
+
+            # NOTE -- leaving out a whole class of derivative/aliquot specimens that have a label but no parent label, since they exist in OpS already (i.e. in the case of pushing updates to them)
+            # that is, if there are no parents in the specimenDF, we should check for derivatives/aliquots and attempt to match and update, instead of defaulting to return (see last else statement in func)
             return
 
         else:
 
             for ind, data in tqdm(self.specimenDF.loc[filt].iterrows(), desc="Recursive Specimens", unit=" Specimens"):
 
-                #  aliquot label format may be set at system level, so better to be accomodative in those cases
+                #  aliquot label format may be set at system level, so better to allow aliquots with no label to pass this checkpoint
                 if pd.notna(data["Specimen Label"]) or data["Lineage"].lower() == "aliquot":
 
                     specimenLabel = data["Specimen Label"]
@@ -1005,6 +1008,15 @@ class Integration(Settings):
 
                     pass  # add to log since these will be derivatives/aliquots that don't have parents
 
+            # NOTE: use the below to capture auto-generated specimen labels in the future, if/when we create via bulk upload without knowing/having labels already
+
+            # if response and specimenLabel is None:
+
+            #     if self.isUniversal:
+            #         pass
+
+            #     self.recordDF.loc[ind, "Specimen Label"] = response[""]
+
     #  ---------------------------------------------------------------------
 
     def uploadSpecimens(self):
@@ -1017,7 +1029,7 @@ class Integration(Settings):
             self.currentEnv = env
             self.currentItem = item
             self.specimenDF = pd.read_csv(item, dtype=str)
-            self.specimenUpdated = self.specimenDF.copy()
+            self.recordDF = self.specimenDF.copy()
 
             cols = self.specimenDF.columns.values
 
@@ -1484,7 +1496,9 @@ class Integration(Settings):
 
         inputItems = self.validateInputFiles(self.auditInputDir, keyword.lower())
 
-        for item, env in zip(inputItems.keys(), inputItems.values()):
+        for item, env in tqdm(inputItems.items(), desc="Files Processed", unit=" Files"):
+
+            fileName = " ".join(item.split("_")[1:])
 
             self.currentEnv = env
             self.auditDF = pd.read_csv(item, dtype=str)
@@ -1505,8 +1519,22 @@ class Integration(Settings):
 
                 comparedDF = pd.DataFrame(columns=cols)
 
+                criticalCols = ["CP Short Title", "PPID", "Last Name", "Date Of Birth"]
+                criticalErrors = self.auditDF[self.auditDF[criticalCols].isna().any(axis=1)].copy()
+                criticalErrors.to_csv(f"./output/records_with_critical_errors_{fileName}", index=False)
+
+                errorFilt = self.auditDF.index.isin(criticalErrors.index)
+                self.participantDF = self.auditDF.loc[~errorFilt].copy()
+
                 participantSub = ["CP Short Title", "PPID", "First Name", "Last Name", "Middle Name", "Date Of Birth"]
-                self.participantDF = self.auditDF.drop_duplicates(subset=participantSub).copy()
+                self.participantDF = self.participantDF.drop_duplicates(subset=participantSub)
+
+                # keep = false marks all duplicates as true for filtering, otherwise options are mark only first or last instance of duplicate
+                duplicatedRecords = self.auditDF.loc[self.auditDF.duplicated(subset=participantSub, keep=False)].copy()
+                duplicatedRecords.to_csv(f"./output/duplicate_records_in_original_{fileName}", index=False)
+
+                # done using these, so might as well clear up some memory, etc.
+                del duplicatedRecords, criticalErrors
 
                 dateList = ["Registration Date", "Date Of Birth", "Death Date"]
 
@@ -1525,9 +1553,21 @@ class Integration(Settings):
                 else:
                     self.participantAuditDF = self.participantDF.copy()
 
-                for ind, data in self.participantAuditDF.iterrows():
+                for ind, data in tqdm(self.participantAuditDF.iterrows(), desc="Records Audited", unit=" Records"):
 
+                    # puts data in alphabetical order by row label
                     data.sort_index(inplace=True)
+
+                    # putting pmis in alphabetical order by site name so that there are not false positives when doing 1:1 comparison of data vs. OpS records
+                    pmiCols = [col for col in data.index if "site name" in col.lower() and pd.notna(data[col])]
+                    newPMIs = {data[col]: data[f"PMI#{col.split('#')[1]}#MRN"] for col in pmiCols}
+                    sortedPMIs = sorted(newPMIs.items(), key=(lambda x: x[0]))
+                    sortedPMIs = {pmi[0]: pmi[1] for pmi in sortedPMIs}
+
+                    # this may leave a duplicate pmi entry if there had been a column skipped during data entry (i.e. if pmis were entered in #1, #2, and #4 instead of #1, #2, #3)
+                    for i, vals in enumerate(sortedPMIs.items()):
+                        data[f"PMI#{i+1}#Site Name"] = vals[0]
+                        data[f"PMI#{i+1}#MRN"] = vals[1]
 
                     matchData = {
                         "cpId": cpIDs[data["CP Short Title"]],
@@ -1554,7 +1594,13 @@ class Integration(Settings):
 
                         compareDict["CP Short Title"] = participantData.get("cpShortTitle")
                         compareDict["PPID"] = participantData.get("ppid")
-                        compareDict["Registration Date"] = self.fromUTC(participantData.get("registrationDate"))
+                        compareDict["Registration Date"] = (
+                            self.fromUTC(participantData.get("registrationDate"))
+                            if participantData.get("registrationDate") > 0
+                            else self.fillerDate  # this is generally used in the case where a date is required but missing and indicates that it is likely fabricated to enable upload to proceed
+                            if participantData.get("registrationDate") == -2208970800000
+                            else f"Could not convert: {participantData.get('registrationDate')}"
+                        )
                         compareDict["Registration Site"] = participantData.get("site")
                         compareDict["External Subject ID"] = participantData.get("externalSubjectId")
                         compareDict["Activity Status"] = participantData.get("activityStatus")
@@ -1594,14 +1640,17 @@ class Integration(Settings):
                         pmis = participantData["participant"].get("pmis")
 
                         if pmis:
-                            for num, pmi in enumerate(pmis):
-                                compareDict[f"PMI#{num+1}#Site Name"] = pmi["siteName"]
-                                compareDict[f"PMI#{num+1}#MRN"] = pmi["mrn"]
+                            # putting pmis in order by site name so that there are not false positives when doing 1:1 comparison of data vs. OpS records
+                            newPMIs = {pmi["siteName"]: pmi["mrn"] for pmi in pmis}
+                            sortedPMIs = sorted(newPMIs.items(), key=(lambda x: x[0]))
+                            sortedPMIs = {item[0]: item[1] for item in sortedPMIs}
+
+                            for num, pmi in enumerate(sortedPMIs.items()):
+                                compareDict[f"PMI#{num+1}#Site Name"] = pmi[0]
+                                compareDict[f"PMI#{num+1}#MRN"] = pmi[1]
 
                         if participantData["participant"].get("extensionDetail") is not None:
-
                             pafForm = participantData["participant"]["extensionDetail"]["formCaption"]
-
                             pafVals = participantData["participant"]["extensionDetail"]["attrs"]
                             pafDict = {}
 
@@ -1615,8 +1664,7 @@ class Integration(Settings):
                                     for num, val in enumerate(field["value"]):
 
                                         for subField in val:
-
-                                            key = f"{pafForm}#{field['caption']}#{num}#{subField['caption']}"
+                                            key = f"{pafForm}#{field['caption']}#{num+1}#{subField['caption']}"
                                             pafDict[key] = subField["value"]
 
                             compareDict.update(pafDict)
@@ -1627,17 +1675,27 @@ class Integration(Settings):
 
                         compareSeries = pd.Series(compareDict)
                         compareSeries.sort_index(inplace=True)
+
+                        # below in case fields changed around the provided records between upload and audit, in which case there would be additional columns in compareSeries
+                        extras = [item for item in compareSeries.index.values if item not in data.index.values]
+                        compareSeries.drop(index=extras, inplace=True)
+
                         compared = data.compare(compareSeries).T
                         compared.insert(0, "PPID", compareDict["PPID"])
                         comparedDF = comparedDF.append(compared)
 
                     else:
                         comparedDF.append(data)
-                        filt = "PPID" == data["PPID"]
+                        filt = comparedDF["PPID"] == data["PPID"]
                         comparedDF.loc[filt, "Identifier"] = "Record for this participant not found in OpS"
 
-                comparedDF.dropna(axis=1, how="all", inplace=True)
-                comparedDF.to_csv(f"./output/audited_{' '.join(item.split('_')[1:])}", index=False)
+                    # added this for cases where there are many records and one issue therein means the entire script breaks and needs to run again -- at least this keeps partial records
+                    comparedDF.to_csv(f"./output/audited_{fileName}", index=False)
+
+                # side effect of below is that places where a record has something OpS doesn't have (or vice versa) results in only a single entry and is not clear if the entry is from OpS or from the original data
+                subset = [col for col in comparedDF.columns if col != "PPID"]
+                comparedDF.dropna(subset=subset, how="all", inplace=True)
+                comparedDF.to_csv(f"./output/audited_{fileName}", index=False)
 
             # if keyword.lower() == "visits" or keyword.lower() == "universal":
 
@@ -2430,6 +2488,12 @@ class Integration(Settings):
         data = {
             "cpId": cpID,
             "aql": AQL,
+            # "caseSensitive": "true",
+            # "drivingForm": "Participant",
+            # "outputColumnExprs": "false",
+            # "outputIsoDateTime": "true",
+            # "runType": "Data",
+            # "wideRowMode": "DEEP",
         }
 
         response = self.postResponse(self.queryExtension, data)
