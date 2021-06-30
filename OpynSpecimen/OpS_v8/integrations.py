@@ -4,7 +4,7 @@ import time
 import pytz
 import shutil
 import random
-from datetime import datetime, timezone
+from datetime import datetime
 
 import requests
 import numpy as np
