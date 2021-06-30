@@ -203,7 +203,7 @@ This library is designed to help overcome various points of friction discovered 
   - Calls the validatePreupload and preuploadAudit functions sequentially
   - **keyword**: The search term
   - **matchPPID**: If `True`, includes PPID as a critical column when performing validation -- reports and removes records which do have have a PPID
- - `Integration.validatePreupload(keyword, matchPPID=False)`
+- `Integration.validatePreupload(keyword, matchPPID=False)`
   - Validates that the records meet the minimum requirements for sucessful upload into OpS (i.e. OpS required data is present)
   - **keyword**: The search term
   - **matchPPID**: If `True`, includes PPID as a critical column when performing validation -- reports and removes records which do have have a PPID
