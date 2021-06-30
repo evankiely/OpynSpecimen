@@ -122,32 +122,30 @@ class Integration(Settings):
 
         response = requests.request(method, url, headers=headers, data=data)
 
-        if not response.ok and matchPPID:
+        #  if there's a participant with the same PPID in the cp already, see if they match the participant being uploaded
+        ppidErrors = ["CPR_DUP_PPID", "CPR_MANUAL_PPID_NOT_ALLOWED"]
 
-            #  if there's a participant with the same PPID in the cp already, see if they match the participant being uploaded
-            ppidErrors = ["CPR_DUP_PPID", "CPR_MANUAL_PPID_NOT_ALLOWED"]
+        if not response.ok and matchPPID and response.json()[0]["code"] in ppidErrors:
 
-            if response.json()[0]["code"] in ppidErrors:
+            #  documentation was incorrect here -- use "birthDate" instead of "DOB"
+            matchData = {
+                "cpId": obj.cpId,
+                "name": obj.participant.lastName,
+                "ppid": obj.ppid,
+                "birthDate": obj.participant.birthDate,
+                "maxResults": 1,
+                "exactMatch": True,
+            }
 
-                #  documentation was incorrect here -- do not use "DOB"
-                matchData = {
-                    "cpId": obj.cpId,
-                    "name": obj.participant.lastName,
-                    "ppid": obj.ppid,
-                    "birthDate": obj.participant.birthDate,
-                    "maxResults": 1,
-                    "exactMatch": True,
-                }
+            matchExtension = extension + "list"
+            response = self.postResponse(matchExtension, matchData)
 
-                matchExtension = extension + "list"
-                response = self.postResponse(matchExtension, matchData)
+            #  if there is a match, get the match's cprId and use that to update the info associated with that participant
+            if response:
 
-                #  if there is a match, get the match's cprId and use that to update the info associated with that participant
-                if response:
-
-                    #  extension needs to be CPR ID for participant who matched PPID in the CP of interest
-                    extension += str(response[0]["id"])
-                    response = self.postResponse(extension, obj, method="PUT")
+                #  extension needs to be CPR ID for participant who matched PPID in the CP of interest
+                extension += str(response[0]["id"])
+                response = self.postResponse(extension, obj, method="PUT")
 
             else:
 
@@ -598,8 +596,10 @@ class Integration(Settings):
         for item, env in inputItems.items():
 
             self.currentEnv = env
-
+            self.currentItem = item
             self.participantDF = pd.read_csv(item)
+            self.preuploadAudit("participants")
+            self.recordDF = self.participantDF.copy()
 
             cols = self.participantDF.columns.values
 
@@ -681,8 +681,6 @@ class Integration(Settings):
 
     def universalUpload(self, matchPPID=False):
 
-        # TODO: add criticalCols/criticalErrors check, as in auditData function
-
         self.isUniversal = True
         inputItems = self.validateInputFiles(self.uploadInputDir, "universal")
 
@@ -690,12 +688,13 @@ class Integration(Settings):
 
             self.currentEnv = env
             self.currentItem = item
-            self.universalDF = pd.read_csv(item, dtype=str)
+            item = item.lower()
+            self.universalDF = pd.read_csv(item, dtype=str).dropna(axis=0, how="all").dropna(axis=1, how="all")
             self.recordDF = self.universalDF.copy()
 
-            cols = self.universalDF.columns.values
+            self.universalCols = self.universalDF.columns.values
 
-            for col in tqdm(cols, desc="Columns Processed", unit=" Columns"):
+            for col in tqdm(self.universalCols, desc="Columns Processed", unit=" Columns"):
                 self.universalDF[col] = self.universalDF[col].apply(self.toUTC, args=[col])
 
             self.setCPDF()
@@ -709,47 +708,41 @@ class Integration(Settings):
                 for cpShortTitle in cpIDs
             }
 
-            #  NOTE: also drop any irrelevant specimen/visit columns to reduce redundant processing, memory consumption, etc.?
+            if "universal" in item or "participants" in item:
 
-            participantSub = ["CP Short Title", "First Name", "Last Name", "Middle Name", "Date Of Birth"]
+                self.validateAndAuditUpload("participants", matchPPID=matchPPID)
 
-            self.participantDF = self.universalDF.drop_duplicates(subset=participantSub).copy()
+                #  getting all visit additional field form info and making a dict as above
+                self.formExtensions = {
+                    cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
+                    for cpShortTitle, cpId in cpIDs.items()
+                }
 
-            #  getting all visit additional field form info and making a dict as above
-            self.formExtensions = {
-                cpShortTitle: self.getResponse(self.pafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in cpIDs.items()
-            }
+                self.makeParticipants(matchPPID=matchPPID)
 
-            self.makeParticipants(matchPPID=matchPPID)
+            if "universal" in item or "visits" in item:
 
-            if "Visit Name" in cols:
-                self.visitDF = (
-                    self.universalDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
-                )
+                self.validateAndAuditUpload("visits")
 
-            else:
-                self.visitDF = self.universalDF.dropna(subset=["Event Label"]).copy()
+                #  getting all visit additional field form info and making a dict as above
+                self.formExtensions = {
+                    cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
+                    for cpShortTitle, cpId in cpIDs.items()
+                }
 
-            #  getting all visit additional field form info and making a dict as above
-            self.formExtensions = {
-                cpShortTitle: self.getResponse(self.vafExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in cpIDs.items()
-            }
+                self.makeVisits()
 
-            self.makeVisits()
+            if "universal" in item or "specimens" in item:
 
-            self.specimenDF = (
-                self.universalDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"]).copy()
-            )
+                self.validateAndAuditUpload("specimens")
 
-            #  getting all specimen additional field form info and making a dict as above
-            self.formExtensions = {
-                cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
-                for cpShortTitle, cpId in cpIDs.items()
-            }
+                #  getting all specimen additional field form info and making a dict as above
+                self.formExtensions = {
+                    cpShortTitle: self.getResponse(self.safExtension, params={"cpId": cpId})
+                    for cpShortTitle, cpId in cpIDs.items()
+                }
 
-            self.recursiveSpecimens()
+                self.recursiveSpecimens()
 
             shutil.move(item, self.translatorOutputDir)
 
@@ -883,6 +876,7 @@ class Integration(Settings):
             self.currentEnv = env
             self.currentItem = item
             self.visitDF = pd.read_csv(item, dtype=str)
+            self.preuploadAudit("visits")
             self.recordDF = self.visitDF.copy()
 
             cols = self.visitDF.columns.values
@@ -1000,14 +994,30 @@ class Integration(Settings):
 
                     pass  # add to log since these will be derivatives/aliquots that don't have parents
 
-            # NOTE: use the below to capture auto-generated specimen labels in the future, if/when we create via bulk upload without knowing/having labels already
+            # Below captures and writes new Specimen Labels created when uploading data which excludes them
+            # Not yet tested as of 6/30/2021
+            if response and pd.isna(data["Specimen Label"]):
 
-            # if response and specimenLabel is None:
+                # included for universal separately since it could continue on to making specimens, and visit name is critical info for that
+                if self.isUniversal:
+                    filt = (
+                        (self.universalDF["Visit Name"] == specimen.visitName)
+                        & (self.universalDF["Type"] == specimen.type)
+                        & (self.universalDF["Lineage"] == specimen.lineage)
+                    )
+                    self.universalDF.loc[filt, "Specimen Label"] = response["label"]
+                    self.universalDF.loc[filt, "Parent Specimen Label"] = response["parentLabel"]
 
-            #     if self.isUniversal:
-            #         pass
-
-            #     self.recordDF.loc[ind, "Specimen Label"] = response[""]
+                filt = (
+                    (self.recordDF["Visit Name"] == specimen.visitName)
+                    & (self.recordDF["Type"] == specimen.type)
+                    & (self.recordDF["Lineage"] == specimen.lineage)
+                )
+                self.recordDF.loc[filt, "Specimen Label"] = response["label"]
+                self.recordDF.loc[filt, "Parent Specimen Label"] = response["parentLabel"]
+                self.recordDF.to_csv(
+                    f"{self.translatorOutputDir}/records_{' '.join(self.currentItem.split('_')[1:])}", index=False
+                )
 
     #  ---------------------------------------------------------------------
 
@@ -1021,6 +1031,7 @@ class Integration(Settings):
             self.currentEnv = env
             self.currentItem = item
             self.specimenDF = pd.read_csv(item, dtype=str)
+            self.preuploadAudit("specimens")
             self.recordDF = self.specimenDF.copy()
 
             cols = self.specimenDF.columns.values
@@ -1480,6 +1491,259 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
+    def validateAndAuditUpload(self, keyword, matchPPID=False):
+        self.validatePreupload(keyword, matchPPID=matchPPID)
+        self.preuploadAudit(keyword)
+
+    #  ---------------------------------------------------------------------
+    #  Only ensures that the data being validated will go into OpS -- does not audit the data itself
+    def validatePreupload(self, keyword, matchPPID=False):
+
+        fileName = " ".join(self.currentItem.split("_")[1:])
+
+        if keyword == "participants":
+
+            if self.isUniversal:
+                df = self.universalDF
+            else:
+                df = self.participantDF
+
+            participantCritical = ["CP Short Title", "Registration Date"]  # required for upload
+
+            if matchPPID:
+                participantCritical += ["PPID"]
+
+            criticalFilt = df[participantCritical].isna().any(axis=1)
+            criticalErrors = df[criticalFilt].copy()
+
+            if criticalErrors.size:
+                criticalErrors.to_csv(f"./output/participant_records_with_critical_errors_{fileName}", index=False)
+
+                errorFilt = df.index.isin(criticalErrors.index)
+                df = df.loc[~errorFilt].copy()
+
+        elif keyword == "visits":
+
+            if self.isUniversal:
+                df = self.universalDF
+            else:
+                df = self.visitDF
+
+            visitCritical = ["CP Short Title", "PPID"]  # required for upload
+
+            criticalFilt = df[visitCritical].isna().any(axis=1)
+            criticalErrors = df[criticalFilt].copy()
+
+            if criticalErrors.size:
+                criticalErrors.to_csv(f"./output/visit_records_with_critical_errors_{fileName}", index=False)
+
+                errorFilt = df.index.isin(criticalErrors.index)
+                df = df.loc[~errorFilt].copy()
+
+        elif keyword == "specimens":
+
+            if self.isUniversal:
+                df = self.universalDF
+            else:
+                df = self.specimenDF
+
+            specimenCritical = [
+                "CP Short Title",
+                "Visit Name",
+                "Type",
+            ]  # required for upload
+
+            # looks different than other cases because have to account for instances where Type == "not specified" and the Class field is empty, as it is required in that case
+            # also need to account for cases where specimen label is missing and lineage is aliquot, because that is permissible
+            # and when parent specimen label is missing but lineage is new, since that is also permissible
+            criticalFilt = (
+                df[specimenCritical].isna().any(axis=1)
+                | ((df["Type"].str.lower() == "not specified") & (df["Class"].isna()))
+                | ((df["Specimen Label"].isna()) & (df["Lineage"] != "Aliquot"))
+                | ((df["Parent Specimen Label"].isna()) & (df["Lineage"] != "New"))
+            )
+            criticalErrors = df[criticalFilt].copy()
+
+            if criticalErrors.size:
+                criticalErrors.to_csv(f"./output/specimen_records_with_critical_errors_{fileName}", index=False)
+
+                errorFilt = df.index.isin(criticalErrors.index)
+                df = df.loc[~errorFilt].copy()
+
+    #  ---------------------------------------------------------------------
+    #  Only audits data, does not necessarily validate that it will go in to OpS
+    def preuploadAudit(self, keyword):
+
+        fileName = " ".join(self.currentItem.split("_")[1:])
+
+        if keyword == "participants":
+
+            # logic of below is as follows:
+            # screen broadly for duplicates in order to narrow to unique cases -- this should be a list of unique participant records that is ideal for upload
+            # however, if we know that each participant record should be unique, we can then reason that if the first, last, dob, etc. match inside this supposedly unique set of participants
+            # then we have an issue where data elsewhere in the record varied and made the "duplicate" record appear as a unique case, since it didn't match perfectly when looking for duplicates across all columns
+
+            # with universal, one challenge is that everything will almost certainly appear as a duplicate at least once, since it includes visits/specimens, each of which will also have participant info
+            # meaning only this second screen is super relevant for universal, and the first duplicate detection should not be written into a file if isUniversal
+
+            # one potential issue with this approach is the ordering of multi-instance columns
+            # such as those for Race, Ethnicity, etc., where one participant may have multiple, but the order of them could vary between records, thus giving false positive
+
+            participantSub = [
+                "CP Short Title",
+                "PPID",
+                "Registration Date",
+                "Registration Site",
+                "External Subject ID",
+                "First Name",
+                "Last Name",
+                "Middle Name",
+                "Date Of Birth",
+                "Death Date",
+                "Gender",
+                "Vital Status",
+                "SSN",
+                "eMPI",
+            ]
+
+            if self.isUniversal:
+                df = self.universalDF
+                participantSub = [
+                    col
+                    for col in df.columns.values
+                    if col in participantSub
+                    or "PMI" in col
+                    or "Race" in col
+                    or "Ethnicity" in col
+                    or "Participant" in col
+                ]
+
+            else:
+                df = self.participantDF
+                participantSub = df.columns.values
+
+            self.participantDF = df.drop_duplicates(subset=participantSub)
+
+            participantSub = ["CP Short Title", "First Name", "Last Name", "Date Of Birth"]
+            duplicateFilt = self.participantDF.duplicated(subset=participantSub, keep=False)
+            duplicatedRecords = self.participantDF.loc[duplicateFilt].copy()
+
+            if duplicatedRecords.size:
+                duplicatedRecords.to_csv(f"./output/conflicting_participants_in_original_{fileName}", index=False)
+
+                self.participantDF = self.participantDF.loc[~duplicateFilt]
+
+                # below keeps first instance of the duplicate, so may not be ideal, as we can't be certain that the first is the correct one...
+                # the above should retain only records which do not have any duplicates
+                # self.participantDF = self.participantDF.drop_duplicates(subset=participantSub)
+
+        elif keyword == "visits":
+
+            visitSub = [
+                "CP Short Title",
+                "PPID",
+                "Event Label",
+                "Visit Name",
+                "Visit Date",
+                "Collection Site",
+                "Visit Status",
+                "Clinical Status",
+                "Cohort",
+                "Path. Number",
+                "Visit Comments",
+            ]
+
+            if self.isUniversal:
+                df = self.universalDF
+                visitSub = [col for col in df.columns.values if col in visitSub or "Visit" in col or "Clinical" in col]
+
+            else:
+                df = self.visitDF
+                visitSub = df.columns.values
+
+            self.visitDF = df.drop_duplicates(subset=visitSub)
+
+            visitSub = ["CP Short Title", "PPID", "Event Label", "Visit Date"]
+            visitSub += ["Visit Name"] if self.isUniversal else ["Name"]
+
+            duplicateFilt = self.visitDF.duplicated(subset=visitSub, keep=False)
+            duplicatedRecords = self.visitDF.loc[duplicateFilt].copy()
+
+            if duplicatedRecords.size:
+                duplicatedRecords.to_csv(f"./output/conflicting_visits_in_original_{fileName}", index=False)
+
+                self.visitDF = self.visitDF.loc[~duplicateFilt]
+
+                # below keeps first instance of the duplicate, so may not be ideal, as we can't be certain that the first is the correct one...
+                # the above should retain only records which do not have any duplicates
+                # self.visitDF = self.visitDF.drop_duplicates(subset=visitSub)
+
+        elif keyword == "specimens":
+
+            # technically this is as easy as filtering for duplicate specimen labels, but that misses two things
+            # first thing is the case where there are no specimen labels (i.e. are OpS generated)
+            # second thing is that it doesn't narrow the search to cases where the duplicates conflict
+            # technically this implementation isn't great for point 1 either, since it uses specimen label in the second filter
+
+            specimenSub = [
+                "CP Short Title",
+                "Visit Name",
+                "Specimen Requirement Code",
+                "Specimen Label",
+                "Barcode",
+                "Class",
+                "Type",
+                "Lineage",
+                "Parent Specimen Label",
+                "Anatomic Site",
+                "Laterality",
+                "Pathological Status",
+                "Quantity",
+                "Concentration",
+                "Freeze/Thaw Cycles",
+                "Created On",
+                "Comments",
+                "Collection Status",
+                "Container",
+                "Row",
+                "Column",
+                "Position",
+                "Collection Date",
+                "Collection Proceedure",
+                "Collection Container",
+                "Collector",
+                "Received Date",
+                "Received Quality",
+                "Receiver",
+            ]
+
+            if self.isUniversal:
+                df = self.universalDF
+                specimenSub = [
+                    col for col in df.columns.values if col in specimenSub or "External" in col or "Specimen" in col
+                ]
+
+            else:
+                df = self.specimenDF
+                specimenSub = df.columns.values
+
+            self.specimenDF = df.drop_duplicates(subset=specimenSub)
+
+            specimenSub = ["CP Short Title", "Visit Name", "Specimen Label"]
+            duplicateFilt = self.specimenDF.duplicated(subset=specimenSub, keep=False)
+            duplicatedRecords = self.specimenDF.loc[duplicateFilt].copy()
+
+            if duplicatedRecords.size:
+                duplicatedRecords.to_csv(f"./output/conflicting_specimens_in_original_{fileName}", index=False)
+
+                self.specimenDF = self.specimenDF.loc[~duplicateFilt]
+
+                # below keeps first instance of the duplicate, so may not be ideal, as we can't be certain that the first is the correct one...
+                # the above should retain only records which do not have any duplicates
+                # self.specimenDF = self.specimenDF.drop_duplicates(subset=specimenSub)
+
+    #  ---------------------------------------------------------------------
+    # PARTICIPANTS ONLY AS OF 06/25/2021 -- probably need a separate universal audit that has a unified criticalCols list, puts out a unified duplicateRecords file, etc.
     def auditData(self, keyword, wantRandSample=False):
 
         inputItems = self.validateInputFiles(self.auditInputDir, keyword.lower())
@@ -1514,7 +1778,14 @@ class Integration(Settings):
                 errorFilt = self.auditDF.index.isin(criticalErrors.index)
                 self.participantDF = self.auditDF.loc[~errorFilt].copy()
 
-                participantSub = ["CP Short Title", "PPID", "First Name", "Last Name", "Middle Name", "Date Of Birth"]
+                participantSub = [
+                    "CP Short Title",
+                    "PPID",
+                    "First Name",
+                    "Last Name",
+                    "Date Of Birth",
+                    "Registration Date",
+                ]
                 self.participantDF = self.participantDF.drop_duplicates(subset=participantSub)
 
                 # keep = false marks all duplicates as true for filtering, otherwise options are mark only first or last instance of duplicate
@@ -1575,6 +1846,23 @@ class Integration(Settings):
                         participantData = self.getResponse(matchExtension)
 
                         compareDict = {}
+
+                        # could do something like the following
+                        # compareDict = {
+                        #     "CP Short Title": "cpShortTitle",
+                        #     "PPID": "ppid",
+                        #     "Registration Site": "site",
+                        #     "External Subject ID": "externalSubjectId",
+                        #     "Activity Status": "activityStatus",
+                        #     "First Name": "firstName",
+                        #     "Last Name": "lastName",
+                        #     "Middle Name": "middleName",
+                        #     "Gender": "gender",
+                        #     "Vital Status": "vitalStatus",
+                        #     "eMPI": "empi"
+                        # }
+
+                        # compareDict = {key, participantData.get(val) for key, val in compareDict.items()}
 
                         # compareDict["SSN"] = participantData["participant"].get("")
                         # compareDict["Email Address"] = participantData["participant"].get("")
@@ -1683,40 +1971,6 @@ class Integration(Settings):
                 subset = [col for col in comparedDF.columns if col != "PPID"]
                 comparedDF.dropna(subset=subset, how="all", inplace=True)
                 comparedDF.to_csv(f"./output/audited_{fileName}", index=False)
-
-            # if keyword.lower() == "visits" or keyword.lower() == "universal":
-
-            #     self.visitDF = self.auditDF.drop_duplicates(subset=["Visit Name"]).dropna(subset=["Visit Name"]).copy()
-
-            #     numRecords = len(self.visitDF.index)
-
-            #     if numRecords > 30:
-
-            #         checkInds = self.generateRandomSample(numRecords)
-
-            #         filt = self.visitDF.index.isin(checkInds)
-            #         self.visitAuditDF = self.visitDF.iloc[filt].copy()
-
-            #     else:
-            #         self.visitAuditDF = self.visitDF.copy()
-
-            # if keyword.lower() == "specimens" or keyword.lower() == "universal":
-
-            #     self.specimenDF = (
-            #         self.auditDF.drop_duplicates(subset=["Specimen Label"]).dropna(subset=["Specimen Label"]).copy()
-            #     )
-
-            #     numRecords = len(self.specimenDF.index)
-
-            #     if numRecords > 30:
-
-            #         checkInds = self.generateRandomSample(numRecords)
-
-            #         filt = self.specimenDF.index.isin(checkInds)
-            #         self.specimenAuditDF = self.specimenDF.iloc[filt].copy()
-
-            #     else:
-            #         self.specimenAuditDF = self.specimenDF.copy()
 
     #  ---------------------------------------------------------------------
 
