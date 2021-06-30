@@ -165,5 +165,4 @@ class Settings:
         if enVar is not None:
             return enVar
 
-        else:
-            raise NameError(f"Provided key, [{reference}], not found.")
+        raise KeyError(f"Provided key, [{reference}], not found.")
