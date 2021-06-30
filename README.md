@@ -199,6 +199,17 @@ This library is designed to help overcome various points of friction discovered 
   - Pulls file paths for all the files in the Input folder which contain a given keyword
   - **location**: Path to the folder or file that is to be examined
   - **keyword**: The search term
+- `Integration.validateAndAuditUpload(keyword, matchPPID=False)`
+  - Calls the validatePreupload and preuploadAudit functions sequentially
+  - **keyword**: The search term
+  - **matchPPID**: If `True`, includes PPID as a critical column when performing validation -- reports and removes records which do have have a PPID
+ - `Integration.validatePreupload(keyword, matchPPID=False)`
+  - Validates that the records meet the minimum requirements for sucessful upload into OpS (i.e. OpS required data is present)
+  - **keyword**: The search term
+  - **matchPPID**: If `True`, includes PPID as a critical column when performing validation -- reports and removes records which do have have a PPID
+- `Integration.preuploadAudit(keyword)`
+  - Audits data seeking duplicate records and discrepancies internal to records (i.e. if there are duplicates with a value which differs between them, which is accurate?)
+  - **keyword**: The search term
 - `Integration.auditData(keyword, wantRandSample=False)`
   - Audits data in the audit folder by comparing against what is already in OpS. Operates on .CSVs with a keyword in their name, and outputs a .CSV which logs and discrepancies. Currently only supports auditing participant information
   - **keyword**: The search term
