@@ -12,7 +12,7 @@ This library is designed to help overcome various points of friction discovered 
 
 ### Requirements
 - An OpenSpecimen account with Super Admin privilege
-- A Python environment with the tqdm, pytz, NumPy, pandas, Requests, and jsonpickle libraries installed
+- A Python environment (>= 3.7.10) with the tqdm, pytz, NumPy, pandas, Requests, and jsonpickle libraries installed
 
 ### Set-Up
 - These functions require access to OpenSpecimen to work properly, and will need to reference the **Username**, **Password**, and **Domain** of the chosen account
