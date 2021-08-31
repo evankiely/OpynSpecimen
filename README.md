@@ -6,12 +6,12 @@
 ## Introduction
 This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
-**Note**: OpenSpecimen v8 changed some details of the forms/fields api (namely, the JSON formatting), so be sure to select the folder which matches your version of OpS. v8 code should work with v7, though v7 will not work with v8 -- consequently, only the v8 folder will be updated and validated (against v8) from now on. This change also renders the Translator object obsolete, so long as you have never used OpS prior to v8, *and* forms/fields are named consistently across environments, as OpS no longer uses sequentially enumerated field codes, instead opting to use the field name. You can find your version of OpS by selecting the "i" to the left of the "Sign In" button on the landing page, or by selecting the "?" next to the notification icon, then selecting the "About OpenSpecimen" option, after logging in.
+**Note**: A complete refactor of this project is forthcoming, and all code in this repository should be considered depreciated. The code herein will work, but does contain some bugs and should not be used, except as a tool to build understanding while awaiting the pending update.
 
 ## Getting Started
 
 ### Requirements
-- An OpenSpecimen account with Super Admin privilege
+- An OpenSpecimen account with Super Admin privilege and/or API permissions
 - A Python environment (>= 3.7.10) with the tqdm, pytz, NumPy, pandas, Requests, and jsonpickle libraries installed
 
 ### Set-Up
@@ -45,7 +45,7 @@ This library is designed to help overcome various points of friction discovered 
   - The intent is to remove the need for users to change things in the core functions of the Translator and Integration objects
   - The content of this class should remain mostly static, since it consists primarily of details of the OpenSpecimen API. The few things that you will need/want to customize are discussed below
 - The **Translator** class enables easy, human in the loop transitioning of Collection Protocol Workflows between environments, and a generic Diff Report function to compare Workflows
-  - **Note**: This class is no longer necessary as of v8, so long as you've never used an earlier version of OpS (or have since rebuilt all forms/fields with v8) and forms/fields are named consistenly across environments
+  - **Note**: This class is no longer necessary as of v8, so long as you've never used an earlier version of OpS (or have since rebuilt all forms/fields with v8), and forms/fields are named consistenly across environments, as OpS no longer uses sequentially enumerated field codes, instead opting to use the field name. You can find your version of OpS by selecting the "i" to the left of the "Sign In" button on the landing page, or by selecting the "?" next to the notification icon, then selecting the "About OpenSpecimen" option, after logging in.
 - The **Integration** class provides a robust suite of functions to interface with the OpenSpecimen API, with upload capabilities for all OpenSpecimen provided templates, as well as custom implimentations for Participants, Visits, Specimens, and those items combined into a "Universal" template, for a single document based upload, in addition to Arrays, Cores, and more.
   - It is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
 - The **Upload Classes** are a set of Python objects that are used to organize and store information before being serialized to JSON and passed to the API
