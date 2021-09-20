@@ -6,7 +6,7 @@
 ## Introduction
 This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
-**Note**: A complete refactor of this project is forthcoming, and all code in this repository should be considered depreciated. The code herein will work, but does contain some bugs and should not be used, except as a tool to build understanding while awaiting the pending update.
+**Note**: A complete refactor of this project is forthcoming. All code in this repository should be considered deprecated. It will work, but contains a number of bugs and should not be used, except as a tool to build understanding while awaiting the pending update.
 
 ## Getting Started
 
