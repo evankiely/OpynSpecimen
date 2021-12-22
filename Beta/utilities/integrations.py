@@ -1,16 +1,3 @@
-#  Add doc strings! -> ''' doc string '''
-#  make better use of regex, especially for dates -- [0-9]{2}/[0-9]{2}/[0-9]{4}
-#  add type hints as per: https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html
-
-# if match found, compare to data that is to be uploaded -- if the data is the same, skip it; otherwise, log the original and push only that which differs
-
-# use ternary operations --> x = 1 if condition else 0
-
-# df.update(otherDF) appears to be significantly slower than df.loc[otherDF.index, [col or cols]] = otherDF[[col or cols]] -- consider removing update in favor of alternative
-
-#  TODO: accomodate specimenEvents (these are env-wide; stainingEvent, qualityAssuranceAndControl, etc.) --> https://openspecimendev.winship.emory.edu/rest/ng/forms?formType=specimenEvent
-#  potentially in buildExtensionDetail (todo was originally there, though may be better to create a seprate function to handle these so as not to clutter existing function)
-
 import os
 import json  # may be required for workflow functions - investigate removing and replacing with HTTPX reply.json() or something
 import time  # required for metric logging
@@ -4160,35 +4147,3 @@ class Integration(Settings):
         return safAQL
 
     #  ---------------------------------------------------------------------
-
-
-integrate = Integration()
-# integrate.syncDropdowns()
-# integrate.syncFieldList()
-
-# integrate.setCPDF()
-integrate.upload()
-
-# t1 = time.perf_counter()
-# integrate.audit()
-# t2 = time.perf_counter()
-# minutes = str((t2 - t1) / 60)
-# print(f"Time Elapsed: {minutes.split('.')[0]} min {round((t2 - t1)%60)}s")
-
-# t1 = time.perf_counter()
-# integrate.profileFunc("self.upload()")
-# print(f"Time Elapsed: {time.perf_counter() - t1}")
-
-# integrate.syncFormList()
-# integrate.syncFieldList()
-# integrate.updateForms()
-# integrate.syncDropdownList()
-# integrate.syncDropdownPVs()
-# integrate.genericBulkUpload(checkStatus=True)
-# integrate.syncWorkflowList()
-# integrate.syncWorkflows()
-# integrate.updateAll()
-# integrate.syncAll()
-# integrate.auditData("participants")
-# integrate.uploadCPJSON()
-# integrate.fileUpload(importType="UPDATE", checkStatus=True)
