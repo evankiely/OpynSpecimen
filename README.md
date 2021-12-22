@@ -13,7 +13,7 @@ This library is designed to help overcome various points of friction discovered 
 ### Requirements
 - An OpenSpecimen (>= v8.1.RC8) account with Super Admin privilege and/or API permissions
 - A Python environment (>= 3.7.10) with the tqdm, pytz, httpx, pandas, jsonpickle libraries installed
-  - You can easily create this env with the OpS_Env.yml, located in the setUpFiles folder, using the following command from within the directory: `conda env create -f rait_env.yml`
+  - You can easily create this env with the OpS_Env.yml, located in the setUpFiles folder, using the following command from within the directory: `conda env create -f OpS_Env.yml`
 
 ### Set-Up
 - These functions require access to OpenSpecimen to work properly, and will need to reference the **Username**, **Password**, and **Domain** of the chosen account
@@ -52,10 +52,10 @@ This library is designed to help overcome various points of friction discovered 
   - **Note**: OpS no longer uses sequentially enumerated field codes, instead opting to use the field name. As such, this class is no longer necessary as of v8, so long as you've never used an earlier version of OpS (or have since rebuilt all forms/fields with v8), and forms/fields are named consistenly across environments. You can find your version of OpS by selecting the "i" to the left of the "Sign In" button on the landing page, or by selecting the "?" next to the notification icon, then selecting the "About OpenSpecimen" option, after logging in.
   - Refactor of this class is/was planned, but is currently on hold.
 - The **Integration** class provides a robust suite of functions to interface with the OpenSpecimen API, with upload capabilities for all OpenSpecimen provided templates, as well as custom implimentations for a subset of those templates.
-  - Those which have custom implimentations use unique templates, enabling more comprehensive data capture, more robust error checking, more comprehensive templates, etc.
-  - This class also includes audit functions, which directly compares the data in the provided template against what is already in OpS and reports and discrepancies.
+  - Those which have custom implimentations use unique templates, enabling more comprehensive data capture, more robust error checking, faster turn-around times, etc.
+  - This class also includes audit functions, which directly compare the data in the provided template against what is already in OpS and reports any discrepancies.
   - Finally, it is designed to be easily extensible, by making the core API requirements, such as getting/renewing tokens, making HTTP requests, etc., easy to access/invoke
-  - **Note**: The upload functions were originally written to use asynchronous requests, but this overwhlemed OpS extremely quickly. These asynchronous implimentations are still in the code, because uploads using this approach see a significant boost in speed (before crashing the server). Hopefully we will see a more robust OpS in the near future.
+  - **Note**: The upload functions were originally written to use asynchronous requests, but this overwhlemed OpS extremely quickly. These asynchronous implimentations are still in the code (but are commented out), because uploads using this approach see a significant boost in speed (before crashing the server). Hopefully we will see a more robust OpS in the near future (see [Future Directions](https://github.com/evankiely/OpynSpecimen/blob/main/README.md#future-directions) below for another potential workaround)
 - **Generic** is a set of two Python classes which are used to organize and store information before being serialized to JSON and passed to the API. They are "generic" because they have few/no standard attributes, and are built up dynamically based on the record they are built for.
 
 ### Class Methods and Attributes
@@ -430,20 +430,20 @@ This library is designed to help overcome various points of friction discovered 
 ## Future Directions
 
 ### In No Particular Order Unless Otherwise Noted
-- Impliment checking of limitless column order and matching the template order to what is in OpS (highest priority)
-  - If `Race#1` for participant A in OpS is "Asian", but `Race#1` for participant A in the upload template is "Black or African American," OpS will not create a new entry under Race (i.e. `Race#2`: "Black or African American"). It will, instead, overwrite the content of `Race#1` in OpS with the content of `Race#1` in the upload. This is true in all "limitless" fields (MRN, Ethnicity, Clinical Diagnosis, etc.), and has been a source of a lot of data integrity issues when updating records in bulk
+- Impliment checking of limitless column order and match the template order to what is in OpS (highest priority)
+  - If `Race#1` for participant A in OpS is "Asian", but `Race#1` for participant A in the upload template is "Black or African American," OpS will not create a new entry under Race (i.e. `Race#2`: "Black or African American"). It will, instead, overwrite the content of `Race#1` in OpS with the content of `Race#1` in the upload. This is true in all "limitless" fields (MRN, Ethnicity, Clinical Diagnosis, etc.), and has been a source of a lot of data integrity issues when updating records in bulk, as well as causing false positives when auditing
 - User reported bugs/bug fixes (high priority)
 - Integration with APIs of other systems (such as PPMS)
-- Ability for OpS to trigger code via [Jobs](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1491435565/External+jobs)
+- Ability for OpS to trigger code as an [External Job](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1491435565/External+jobs)
   - Enables more complex queries, data analysis/reporting, dashboards/visualizations, and highly customized emails for PIs and stakeholders
 - Compatibility check with Python 3.10 and greater
   - Addition of more robust typing/type hinting
   - Addition of more, and more helpful, comments in code
 - Development of (unit & integration) test suite for more test-driven development
-- Remove Print statements and replace with more helpful progress messages (ideally via tqdm)
+- Remove Print statements and replace with more helpful progress messages (ideally via/in addition to tqdm)
 - Further revision and improvement of documentation
 - More robust record validation (automatically catching cases where records are obviously fake/entered as tests)
-- Ability for user to specify audit to run immediately after upload (i.e. verify data was entered as expected)
+- Ability for user to specify audit to run immediately after upload (i.e. verify data was uploaded to OpS as expected)
 - Add token renewal once server response time drops below n seconds (some potentially promising results indicating that this approach might make asynchronous requests feasible)
 - Refactor of Translator class (low priority)
 - Direct SQL interface with OpS backend (lowest priority)
