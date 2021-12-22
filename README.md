@@ -37,6 +37,11 @@ This library is designed to help overcome various points of friction discovered 
 
 ### Templates
  - Within the Templates folder you will find a set of Excel files. These files illustrate the differences between the standard OpS templates, and the templates used by this library. The un-annotated templates are ready to be used, once they are converted to .CSV (this library only supports .CSVs currently). They are provided as Excel to ensure the formatting is retained, as that is quite helpful when transitioning from the standard templates to the new ones. The annotated templates provide a direct field to field comparison between the standard template and the template used by this library, as well as a description of what data that field is intended to accept.
+ - With the transition from Alpha to Beta, this library has done away with individual folders as context for functions. That is, it no longer relies on upload data going into the Upload folder, or audit data going into the Audit folder. Now context is derived almost exclusively from the file naming conventions. Examples below.
+   - **Context**: Upload of Participant Template into Development
+     - **File Name**: participants_dev_[misc. info].csv
+   - **Context**: Audit of Universal Template data as it exists in Production
+     - **File Name**: audit_universal_prod_[misc. info].csv
 
 ### Core Classes
 - **Settings**
