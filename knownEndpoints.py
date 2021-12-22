@@ -1,8 +1,6 @@
-# Providing this document because the details provided by Krishagni are pretty sparse and not well documented
+# API details provided by Krishagni are pretty sparse and not well documented
 # (see here: https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1116035/REST+APIs)
-# Plus API support is not offered as standard via Krishagni, so I imagine this will be helpful to someone else too
-
-# Finally, decided to make these python objects for ease of use
+# Plus API support is not offered by Krishagni, so I imagine this will be helpful to someone else too
 
 baseURL = "https://openspecimen_.domain.domain.domain/rest/ng/"
 
