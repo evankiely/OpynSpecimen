@@ -30,6 +30,9 @@ This library is designed to help overcome various points of friction discovered 
     - It expects that the production environment has no URL keyword (as in openspecimen.openspecimen.com)
     - It expects that these, aside from prod, are filled from the key for the environmental variables in the Settings class's `self.envs` attribute (as in openspecimen**test**.openspecimen.com and openspecimen**dev**.openspecimen.com)
 
+### Known Issues
+- If, in the course of an upload, you receive an error like: `SQL error: PreparedStatementCallback; SQL [INSERT INTO DE_E_##### (RECORD_ID, VALUE) VALUES (?, ?)]; Deadlock found when trying to get lock; try restarting transaction; nested exception is com.mysql.jdbc.exceptions.jdbc4.MySQLTransactionRollbackException: Deadlock found when trying to get lock; try restarting transaction. Please report this error to the system administrator.` The error is being caused by updating too many records which reference the same dropdown value. You can identify the column which is causing issue by referncing the MySQL backend and inspecting the table provided in the error above as: `DE_E_#####` To solve this issue, add `time.sleep(1.5)` to the end up the function performing the upload, directly above, and in line with, `return data` In the case of a Participant Create, that would be `createParticipants` For a Participant Update, `updateParticipants` And so on. This should largely solve the problem and reduce the instances of the above error significantly, if not completely.
+
 ## Documentation
 
 ### API Endpoints
