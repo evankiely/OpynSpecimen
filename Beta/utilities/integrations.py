@@ -17,6 +17,8 @@ from settings import Settings
 
 # from concurrent.futures import ThreadPoolExecutor  #  enable if/when OpS can handle async requests without crashing -- remember to uncomment the requisite code below as well
 
+# TODO: Look for places where apply is used to enact things that are simple string methods, and replace with .str.[method]
+
 
 class Integration(Settings):
     def __init__(self):
@@ -148,12 +150,25 @@ class Integration(Settings):
 
         for ind, data in cleanedData.iteritems():
 
+            splitInd = ind.split("#")
+
             # for general fields
-            if len(ind.split("#")) < 4:
+            if len(splitInd) < 4 and not splitInd[-1].isdigit():
 
                 filt = fieldDF["fieldName"] == ind.split("#")[1]
                 keyVal = fieldDF.loc[filt, self.currentEnv].item()
                 attrsDict[keyVal] = data
+
+            # for multi-select dropdowns
+            elif len(splitInd) < 4 and splitInd[-1].isdigit():
+
+                filt = fieldDF["fieldName"] == ind.split("#")[1]
+                keyVal = fieldDF.loc[filt, self.currentEnv].item()
+
+                if attrsDict.get(keyVal):
+                    attrsDict[keyVal].append(data)
+                else:
+                    attrsDict[keyVal] = [data]
 
             # for subform fields
             elif len(ind.split("#")) == 4:
@@ -934,8 +949,8 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
-    def runQuery(self, env, cpID, AQL):
-        """Runs a query via OpS and returns the response JSON, otherwise returns error message from the server"""
+    def runQuery(self, env, cpID, AQL, wantWideRows=False, asDF=False):
+        """Runs a query via OpS and returns the response JSON, otherwise returns error message from the server. Use -1 for cpID if querying across multiple CPs specified in AQL"""
 
         token = self.authTokens[env]
         headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
@@ -952,13 +967,25 @@ class Integration(Settings):
             # "outputColumnExprs": "false",
             # "outputIsoDateTime": "true",
             # "runType": "Data",
-            # "wideRowMode": "DEEP",
         }
+
+        # Rather than one row per case of a value, add as many columns as necessary to capture all cases (i.e. instead of one row per MRN Site + MRN Value, one row with multiple columns)
+        if wantWideRows:
+            data["wideRowMode"] = "DEEP"
 
         with httpx.Client(headers=headers, timeout=20) as client:
             reply = client.post(url, data=jp.encode(data, unpicklable=False))
 
         reply = ", ".join([reply.json()[0]["code"], reply.json()[0]["message"]]) if reply.is_error else reply.json()
+
+        if asDF:
+            columns = reply["columnLabels"]
+            data = reply["rows"]
+            reply = pd.DataFrame(data, columns=columns)
+
+            dateCols = [col for col in reply.columns if "date" in col.lower()]
+            for col in dateCols:
+                reply[col] = reply[col].str.replace("-", "/")
 
         return reply
 
@@ -1262,12 +1289,15 @@ class Integration(Settings):
             df["DTs Processed"] = None
 
         for col in dtConvertCols:
-            df[f"Original {col}"] = df[col]
-            filt = df["DTs Processed"].isna() & df[col].notna()
-            df.loc[filt, col] = (
-                pd.to_datetime(df.loc[filt, col]).dt.tz_localize(tz=self.timezone).astype("Int64") // 1e6
-            )
-            df.loc[filt, col] = df.loc[filt, col].astype("Int64").astype(str)
+            originalCol = f"Original {col}"
+
+            if originalCol not in df.columns:
+                df[originalCol] = df[col]
+                filt = df["DTs Processed"].isna() & df[col].notna()
+                df.loc[filt, col] = (
+                    pd.to_datetime(df.loc[filt, col]).dt.tz_localize(tz=self.timezone).astype("Int64") // 1e6
+                )
+                df.loc[filt, col] = df.loc[filt, col].astype("Int64").astype(str)
 
         # very important to notice that the "Of" is capitalized -- otherwise, can always check against columns which are forced into lower case or something
         if "Date Of Birth" in df.columns:
@@ -1305,7 +1335,6 @@ class Integration(Settings):
         if "CP Short Title" in df.columns:
 
             df["CP ID"] = None
-
             cpDF = self.setCPDF()
 
             #  getting all unique CP short titles and their codes in order to build a dict that makes referencing them later easier
@@ -1313,7 +1342,6 @@ class Integration(Settings):
             dfsByCP = {}
 
             for shortTitle in uniqueShortTitles:
-
                 filt = df["CP Short Title"] == shortTitle
                 df.loc[filt, "CP ID"] = (
                     cpDF.loc[(cpDF["cpShortTitle"] == shortTitle), env].astype(int, errors="ignore").item()
@@ -1380,7 +1408,10 @@ class Integration(Settings):
                 participantDF.update(matchedDF)
 
             #  getting all participant additional field form info and making a dict
-            cpID = df["CP ID"].unique()[0].split(".")[0] if "." in df["CP ID"].unique()[0] else df["CP ID"].unique()[0]
+            cpID = df["CP ID"].unique()[0]
+            if not isinstance(cpID, int):
+                cpID = str(cpID)
+                cpID = cpID.split(".")[0] if "." in cpID else cpID
             params = {"cpId": cpID}
             self.formExtension = {shortTitle: self.getFormExtension(self.pafExtension, params=params)}
 
@@ -1555,10 +1586,12 @@ class Integration(Settings):
             "eMPI",
         ]
 
+        colCheck = ["PMI", "Race", "Ethnicity", "Participant"]
+
         participantSub1 = [
             col
             for col in df.columns.values
-            if col in participantSub or "PMI" in col or "Race" in col or "Ethnicity" in col or "Participant" in col
+            if col in participantSub or any([checkVal in col for checkVal in colCheck])
         ]
 
         df = df.drop_duplicates(subset=participantSub1)
@@ -1895,7 +1928,7 @@ class Integration(Settings):
         # note that set will put siteNames in alphabetical order -- it is ok in this case because the original list is used when logging in the else statement
         if len(set(siteNames)) < len(siteNames) or not all(map(str.isdigit, mrnVals)):
 
-            self.recordDF.loc[data.name, "Critical Error - Participant"] = "True"
+            self.recordDF.loc[data.name, "Critical Error - Participant"] = "Duplicate MRNs"
             self.recordDF.to_csv(self.currentItem, index=False)
 
             data["Participant Obj"] = None
@@ -2222,7 +2255,11 @@ class Integration(Settings):
             "Visit Comments",
         ]
 
-        visitSub1 = [col for col in df.columns.values if col in visitSub or "Visit" in col or "Clinical" in col]
+        colCheck = ["Visit", "Clinical"]
+
+        visitSub1 = [
+            col for col in df.columns.values if col in visitSub or any([checkVal in col for checkVal in colCheck])
+        ]
 
         df = df.drop_duplicates(subset=visitSub1)
 
@@ -2687,8 +2724,10 @@ class Integration(Settings):
             "Receiver",
         ]
 
+        colCheck = ["External", "Specimen"]
+
         specimenSub1 = [
-            col for col in df.columns.values if col in specimenSub or "External" in col or "Specimen" in col
+            col for col in df.columns.values if col in specimenSub or any([checkVal in col for checkVal in colCheck])
         ]
 
         df = df.drop_duplicates(subset=specimenSub1)
