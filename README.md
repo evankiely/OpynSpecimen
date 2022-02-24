@@ -223,11 +223,13 @@ This library is designed to help overcome various points of friction discovered 
   - Returns a chunked dataframe.
   - **df**: Dataframe to be chunked
   - **chunkSize**: Number of rows per chunk (defaults to Integration.asyncChunkSize)
-- `Integration.runQuery(env, cpID, AQL)`
+- `Integration.runQuery(env, cpID, AQL, wantWideRowa=False, asDF=False)`
   - Runs a query via OpS and returns the response JSON, otherwise returns error message from the server
   - **env**: The environment the request is intended for
   - **cpID**: The internal reference code of the CP to query against. Set as -1 to run against all records (i.e. all CPs). Not technically necessary if CP is specified in AQL, but function requires it even if specified in AQL
   - **AQL**: For more information on how to write/structure AQL see [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/110264471/How%2Bto%2Bdesign%2Band%2Brun%2Bqueries%2Bprogrammatically%2Busing%2BAQL) and [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/72024115/Calculated%2Bfields%2BTemporal%2BQueries). It is also possible to inspect the AQL of queries defined in the GUI by watching the network calls, which allows you to avoid, mostly, learning the AQL syntax
+  - **wantWideRows**: Rather than one row per case of a value, add as many columns as necessary to capture all cases (i.e. instead of one row per MRN Site + MRN Value, one row with multiple columns)
+  - **asDF**: Whether the results are returned as a Pandas DataFrame object or as a Dict which replicates the structure of the returned JSON
 - `Integration.cpDefJSONUpload()`
   - Creates a new collection protocol by uploading the CP Def JSON (*NOT* Workflow JSON)
 - `Integration.genericGUIFileUpload(importType="CREATE", checkStatus=False)`
