@@ -160,7 +160,7 @@ class Integration(Settings):
                 attrsDict[keyVal] = data
 
             # for multi-select dropdowns
-            elif len(splitInd) < 4 and splitInd[-1].isdigit():
+            elif len(splitInd) == 3 and splitInd[-1].isdigit():
 
                 filt = fieldDF["fieldName"] == ind.split("#")[1]
                 keyVal = fieldDF.loc[filt, self.currentEnv].item()
