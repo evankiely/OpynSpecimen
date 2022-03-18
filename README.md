@@ -75,6 +75,8 @@ This library is designed to help overcome various points of friction discovered 
   - A dictionary where the keys are the OpenSpecimen environment names, and the values are dictionaries. The sub-dictionaries consist of keys representing the details of the account used to access a given environment, and the values are the results of retrieving the specified environmental variables
 - `Settings.translatorInputDir`
   - The path used to dictate where the translator object should look for input documents
+- `Settings.pathReportInputDir`
+  - The path used to dictate where the pathReportUpload function should look for input documents
 - `Settings.inputDir`
   - The path used to dictate where to look for input documents; Document context is provided by naming convention
 - `Settings.outputDir`
@@ -107,8 +109,10 @@ This library is designed to help overcome various points of friction discovered 
   - AQL which is used when looking up participants based on PPID
 - `Settings.participantIDMatchAQL`
   - AQL which is used when looking up participants based on their OpS internal ID
-- `Settings.visitMatchAQL`
+- `Settings.visitNameMatchAQL`
   - AQL which is used to match visits based on visit name
+- `Settings.visitSurgicalAccessionNumberMatchAQL`
+  - AQL which is used to match visits based on surgical accession number
 - `Settings.specimenMatchAQL`
   - AQL which is used to match specimens based on specimen label
 - `Settings.parentMatchAQL`
@@ -232,6 +236,28 @@ This library is designed to help overcome various points of friction discovered 
   - **asDF**: Whether the results are returned as a Pandas DataFrame object or as a Dict which replicates the structure of the returned JSON
 - `Integration.cpDefJSONUpload()`
   - Creates a new collection protocol by uploading the CP Def JSON (*NOT* Workflow JSON)
+- `Integration.pathReportUpload(env)`
+  - Uploads all surgical pathology reports located in the pathReports folder. Expects that the file name is the surgical accession number (AKA "Path. Number")
+  - **env**: The environment the request is intended for
+- `Integration.matchVisitForPathReport(data, env)`
+  - Matches visits based on their surgical accession number. Differs from `Integration.matchVisitSurgicalAccessionNumber()` in a couple of key ways. Returns a dataframe
+  - **data**: A dataframe object with header "Path. Number"
+  - **env**: The environment the request is intended for
+- `Integration.pushPathReports(data, env)`
+  - Performs upload of the surgical pathology report PDFs
+  - **data**: A dataframe object with headers "File Path" and "Visit ID"
+  - **env**: The environment the request is intended for
+- `Integration.updateCPSites(envs=None, add=None, remove=None, refreshCPList=False)`
+  - Adds/removes site(s) from all CPs in the specified env(s)
+  - **envs**: The environment(s) the request is intended for
+  - **add**: Site(s) to add
+  - **remove**: Site(s) to remove
+  - **refreshCPList**: Whether or not to refresh records all CPs from all envs (for most accurate results if new CPs have been created since last sync, etc.)
+- `Integration.pushCPSiteUpdate(env, data, add)`
+  - Performs upload of the surgical pathology report PDFs
+  - **env**: The environment the request is intended for
+  - **data**: A dataframe object with headers "Response" and "Updated Sites"
+  - **add**: Site(s) to add
 - `Integration.genericGUIFileUpload(importType="CREATE", checkStatus=False)`
   - A generic function used to upload files via the API rather than the GUI. Behaves exactly the same as if you were doing a bulk upload of data via the OpenSpecimen templates and GUI
   - **importType**: Whether the data is intended to `"CREATE"` new records, or `"UPDATE"` old ones
@@ -319,6 +345,10 @@ This library is designed to help overcome various points of friction discovered 
 - `Integration.matchVisitName(data)`
   - Uses visit name to attempt to match an existing visit in OpS
   - **data**: Visit data
+- `Integration.matchVisitSurgicalAccessionNumber(data)`
+  - Uses surgical accession number (AKA "Path. Number") to attempt to match an existing visit in OpS
+  - **data**: Visit data
+  - Note: Untested and unused so far (for a modified version which has been tested and is confirmed working see: `Integration.pathReportUpload()`)
 - `Integration.visitNoMatchValidation(df)`
   - Enforces the more stringent rules that come with needing to create a visit (i.e. if they fail to match an existing visit in OpS)
   - **df**: Dataframe of visits which failed to match
