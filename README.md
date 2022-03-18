@@ -6,7 +6,7 @@
 ## Introduction
 This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
-**Note**: The Beta version is the most recent and up to date revision. All Alpha code in this repository should be considered deprecated. It may still work, but contains a number of bugs and should not be used, except as a tool to build understanding.
+**Note**: The Beta version is the most recent and up to date revision. All Alpha code in this repository should be considered deprecated.
 
 ## Getting Started
 
@@ -36,15 +36,19 @@ This library is designed to help overcome various points of friction discovered 
 ## Documentation
 
 ### API Endpoints
- - See knownEndpoints.py (in the OpynSpecimen folder) for a set of endpoints I have used/discovered while putting this together. For Krishagni's documentation, [see here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1116035/REST+APIs)
+ - See [knownEndpoints.py](https://github.com/evankiely/OpynSpecimen/blob/main/knownEndpoints.py) for a set of endpoints I have used/discovered while putting this together. For Krishagni's documentation, [see here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1116035/REST+APIs)
 
 ### Templates
- - Within the Templates folder you will find a set of Excel files. These files illustrate the differences between the standard OpS templates, and the templates used by this library. The un-annotated templates are ready to be used, once they are converted to .CSV (this library only supports .CSVs currently). They are provided as Excel to ensure the formatting is retained, as that is quite helpful when transitioning from the standard templates to the new ones. The annotated templates provide a direct field to field comparison between the standard template and the template used by this library, as well as a description of what data that field is intended to accept.
- - With the transition from Alpha to Beta, this library has done away with individual folders as context for functions. That is, it no longer relies on upload data going into the Upload folder, or audit data going into the Audit folder. Now context is derived almost exclusively from the file naming conventions. Examples below.
+ - Within the [Templates folder](https://github.com/evankiely/OpynSpecimen/tree/main/Beta/templates) you will find a set of Excel files. These files illustrate the differences between the standard OpS templates, and the templates used by this library. The un-annotated templates are ready to be used, once they are converted to .CSV (this library only supports .CSVs currently). They are provided as Excel to ensure the formatting is retained, as that is quite helpful when transitioning from the standard templates to the new ones. The annotated templates provide a direct field to field comparison between the standard template and the template used by this library, as well as a description of what data that field is intended to accept.
+ - With the transition from Alpha to Beta, this library has done away with individual folders as context for the main upload/audit functions (Universal, Participant, Visit, and Specimen). That is, it no longer relies on upload data going into the Upload folder, or audit data going into the Audit folder. Now context is derived almost exclusively from the file naming conventions. Examples below.
    - **Context**: Upload of Participant Template into Development
      - **File Name**: participants_dev_[misc. info].csv
    - **Context**: Audit of Universal Template data as it exists in Production
      - **File Name**: audit_universal_prod_[misc. info].csv
+   - **Context**: Upload of Surgical Pathology Report PDF (still relies on the use of a folder for context)
+     - **File Name**: ./pathReports/[surgical accession number].pdf
+   - **Context**: Translation of a workflow JSON from Development to Production (still relies on the use of a folder for context)
+     - **File Name**: ./input/translate/translate_[misc. info].pdf
 
 ### Core Classes
 - **Settings**
