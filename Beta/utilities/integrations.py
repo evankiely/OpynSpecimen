@@ -1037,7 +1037,12 @@ class Integration(Settings):
 
         df = self.matchVisitForPathReport(df, env)
         df["File Path"] = df["Path. Number"].map((lambda x: f"{self.pathReportInputDir}{x}.pdf"))
-        df.apply((lambda x: self.pushPathReports(x, env)), axis=1)
+        df["Upload Results"] = df.apply((lambda x: self.pushPathReports(x, env)), axis=1)
+
+        df.rename(columns={"Visit Original CP": "Visit CP"})
+        df.drop(subset=["File Path", "Visit ID"], inplace=True)
+
+        df.to_csv("./path_report_upload_records.csv", index=False)
 
     #  ---------------------------------------------------------------------
 
@@ -1086,6 +1091,8 @@ class Integration(Settings):
 
         with httpx.Client(headers=headers, timeout=20) as client:
             reply = client.post(url, files=files)
+
+        return reply.text
 
     #  ---------------------------------------------------------------------
 
