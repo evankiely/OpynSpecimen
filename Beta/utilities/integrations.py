@@ -1030,6 +1030,134 @@ class Integration(Settings):
 
     #  ---------------------------------------------------------------------
 
+    def pathReportUpload(self, env):
+
+        data = [report.split(".")[0] for report in os.listdir(self.pathReportInputDir)]
+        df = pd.DataFrame(columns=["Path. Number"], data=data)
+
+        df = self.matchVisitForPathReport(df, env)
+        df["File Path"] = df["Path. Number"].map((lambda x: f"{self.pathReportInputDir}{x}.pdf"))
+        df.apply((lambda x: self.pushPathReports(x, env)), axis=1)
+
+    #  ---------------------------------------------------------------------
+
+    def matchVisitForPathReport(self, data, env):
+        """Uses surgical accession number to attempt to match an existing visit in OpS"""
+
+        token = self.authTokens[env]
+        headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
+        base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
+        url = f"{base}{self.queryExtension}"
+
+        labels = data["Path. Number"].map((lambda x: f'"{x}"')).copy()
+        matchVals = ", ".join(labels.to_list())
+
+        with httpx.Client(headers=headers, timeout=20) as client:
+
+            reply = client.post(
+                url,
+                data=jp.encode(
+                    {
+                        "cpId": -1,
+                        "aql": self.visitSurgicalAccessionNumberMatchAQL.replace("_", matchVals),
+                    },
+                    unpicklable=False,
+                ),
+            )
+
+        visitDetails = pd.DataFrame(data=reply.json()["rows"], columns=reply.json()["columnLabels"], dtype=str)
+
+        return visitDetails
+
+    #  ---------------------------------------------------------------------
+
+    def pushPathReports(self, data, env):
+        """Pushes the path report PDF from pathReportUpload to OpS"""
+
+        token = self.authTokens[env]
+        headers = {"X-OS-API-TOKEN": token}
+        base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
+
+        file = data["File Path"]
+        visit = data["Visit ID"]
+
+        url = f"{base}{self.uploadPathReportExtension.replace('_',visit)}"
+        files = {"file": open(file, "rb")}
+
+        with httpx.Client(headers=headers, timeout=20) as client:
+            reply = client.post(url, files=files)
+
+    #  ---------------------------------------------------------------------
+
+    def updateCPSites(self, envs=None, add=None, remove=None, refreshCPList=False):
+        """Updates the sites associated with a collection protocol"""
+
+        if not add and not remove:
+            return
+
+        cpDF = self.setCPDF(refresh=refreshCPList)
+        envs = self.envs.keys() if not envs else [envs] if not isinstance(envs, list) else envs
+
+        add = add if isinstance(add, list) else [add] if add else []
+        remove = remove if isinstance(remove, list) else [remove] if remove else []
+
+        for env in envs:
+
+            filt = cpDF[env].notna()
+            currentDF = cpDF[filt].copy()
+
+            currentDF[env] = currentDF[env].astype(str).map((lambda x: x.split(".")[0]))
+            currentDF["Response"] = currentDF[env].map(
+                (lambda x: self.genericGetRequest(env, f"{self.cpWorkflowListExtension}{x}"))
+            )
+
+            filt = currentDF["Response"].map((lambda x: isinstance(x, dict)))
+            currentDF = currentDF[filt]
+
+            currentDF["Sites"] = currentDF["Response"].map((lambda x: x.get("cpSites") if x.get("cpSites") else []))
+
+            currentDF["Updated Sites"] = currentDF["Sites"].map(
+                (lambda x: [site for site in x if site["siteName"] not in remove])
+            )
+
+            currentDF["Errors"] = currentDF.apply((lambda x: self.pushCPSiteUpdate(env, x, add)), axis=1)
+
+            keepCols = ["cpShortTitle", "Errors"]
+            currentDF.drop(columns=[col for col in currentDF.columns if col not in keepCols], inplace=True)
+            currentDF.dropna(subset=["Errors"], inplace=True)
+
+            if len(currentDF):
+                currentDF.to_csv(f"{self.outputDir}{env}_site_update_errors.csv", index=False)
+
+    #  ---------------------------------------------------------------------
+
+    def pushCPSiteUpdate(self, env, data, add):
+        """Pushes data associated with the sites update"""
+
+        base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
+        url = f"{base}{self.cpWorkflowListExtension}{data[env]}"
+
+        token = self.authTokens[env]
+        headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
+
+        uploadData = data["Response"]
+        uploadData["cpSites"] = data["Updated Sites"]
+
+        if add:
+            uploadData["cpSites"].extend(
+                [{"siteName": val} for val in add if all(val != site["siteName"] for site in uploadData["cpSites"])]
+            )
+
+        with httpx.Client(headers=headers, timeout=20) as client:
+            response = client.put(url, data=jp.encode(uploadData, unpicklable=False))
+
+            response = response.json()
+
+            if isinstance(response, list):
+                return response
+
+    #  ---------------------------------------------------------------------
+
     def genericGUIFileUpload(self, importType="CREATE", checkStatus=False):
         """Enables standard bulk uploads as per the OpS GUI; Allows for distinction between Create and Update per the GUI"""
 
@@ -1553,6 +1681,7 @@ class Integration(Settings):
             )
 
         self.recordDF.update(df)
+
         criticalFilt = df["Critical Error - Participant"].notna()
         df = df.loc[~criticalFilt]
 
@@ -2324,7 +2453,49 @@ class Integration(Settings):
                 data=jp.encode(
                     {
                         "cpId": -1,
-                        "aql": self.visitMatchAQL.replace("_", matchVals),
+                        "aql": self.visitNameMatchAQL.replace("_", matchVals),
+                    },
+                    unpicklable=False,
+                ),
+            )
+
+        visitDetails = pd.DataFrame(data=reply.json()["rows"], columns=reply.json()["columnLabels"], dtype=str)
+        visitDetails.set_index("Visit Name", inplace=True)
+
+        ind = data.index.copy()
+        data.set_index("Visit Name", inplace=True)
+        data.update(visitDetails)
+        data.reset_index(inplace=True)
+        data.index = ind
+
+        cols = ["Visit ID", "Visit Original CP"]
+        self.recordDF.loc[data.index, cols] = data[cols]
+        self.recordDF.to_csv(self.currentItem, index=False)
+
+        return data
+
+    #  ---------------------------------------------------------------------
+
+    def matchVisitSurgicalAccessionNumber(self, data):
+        """Uses surgical accession number to attempt to match an existing visit in OpS"""
+
+        token = self.authTokens[self.currentEnv]
+        headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
+        url = (
+            self.baseURL.replace("_", "") if self.currentEnv == "prod" else self.baseURL.replace("_", self.currentEnv)
+        ) + self.queryExtension
+
+        labels = data["Path. Number"].map((lambda x: f'"{x}"')).copy()
+        matchVals = ", ".join(labels.to_list())
+
+        with httpx.Client(headers=headers, timeout=20) as client:
+
+            reply = client.post(
+                url,
+                data=jp.encode(
+                    {
+                        "cpId": -1,
+                        "aql": self.visitSurgicalAccessionNumberMatchAQL.replace("_", matchVals),
                     },
                     unpicklable=False,
                 ),
@@ -2786,7 +2957,9 @@ class Integration(Settings):
         matchFilt = (specimenDF["Parent Specimen Label"].notna()) & (specimenDF["Parent ID"].isna())
 
         if matchFilt.any():
-            specimenDF.loc[matchFilt] = specimenDF.loc[matchFilt].apply(self.populateParentInfo, axis=1)
+            specimenDF.loc[matchFilt] = specimenDF.loc[matchFilt].apply(
+                self.populateParentInfo, args=[specimenDF], axis=1
+            )
 
         matchFilt = (specimenDF["Parent Specimen Label"].notna()) & (specimenDF["Parent ID"].isna())
 
@@ -2814,7 +2987,7 @@ class Integration(Settings):
         if matchFilt.any():
 
             specimenDF.loc[matchFilt] = specimenDF.loc[matchFilt].apply(
-                self.populateParentInfo, args=(specimenDF), axis=1
+                self.populateParentInfo, args=[specimenDF], axis=1
             )
 
             self.recordDF.loc[specimenDF.index, "Parent ID"] = specimenDF["Parent ID"]
