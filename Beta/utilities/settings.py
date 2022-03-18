@@ -30,6 +30,7 @@ class Settings:
         }
 
         self.translatorInputDir = "./input/translate/"
+        self.pathReportInputDir = "./pathReports/"
 
         # eventually, below input dir should supplant the above for translator
         # NOTE when that happens, remember to update the requiredPaths below
@@ -60,7 +61,9 @@ class Settings:
         # used to populate PPIDs in cases where data omits them but includes another value like MRN, etc., which can be used to match profile and get Participant ID
         self.participantIDMatchAQL = 'select CollectionProtocol.shortTitle as "Participant Original CP", Participant.ppid as "PPID", Participant.participantId as "Participant ID", Participant.id as "CPR ID" where Participant.participantId in (_)'
 
-        self.visitMatchAQL = 'select CollectionProtocol.shortTitle as "Visit Original CP", SpecimenCollectionGroup.name as "Visit Name", SpecimenCollectionGroup.id as "Visit ID" where SpecimenCollectionGroup.name in (_)'
+        self.visitNameMatchAQL = 'select CollectionProtocol.shortTitle as "Visit Original CP", SpecimenCollectionGroup.name as "Visit Name", SpecimenCollectionGroup.id as "Visit ID" where SpecimenCollectionGroup.name in (_)'
+        # below currently used only for uploading path reports, but could be used to match visits in general as well
+        self.visitSurgicalAccessionNumberMatchAQL = 'select CollectionProtocol.shortTitle as "Visit Original CP", SpecimenCollectionGroup.name as "Visit Name", SpecimenCollectionGroup.id as "Visit ID", SpecimenCollectionGroup.surgicalPathologyNo as "Path. Number" where SpecimenCollectionGroup.surgicalPathologyNo in (_)'
 
         self.specimenMatchAQL = 'select CollectionProtocol.shortTitle as "Specimen Original CP", Specimen.label as "Specimen Label", Specimen.id as "Specimen ID" where Specimen.label in (_)'
         self.parentMatchAQL = (
@@ -109,6 +112,7 @@ class Settings:
             "./resources",
             "./resources/dropdowns",
             self.translatorInputDir,
+            self.pathReportInputDir,
             self.inputDir,
             self.outputDir,
         ] + [f"./workflows/{env}" for env in self.envs.keys()]
@@ -121,6 +125,7 @@ class Settings:
 
         self.authExtension = "sessions"
         self.uploadExtension = "import-jobs/"
+        self.uploadPathReportExtension = "visits/_/spr-file"
         self.formListExtension = "forms"
         self.cpWorkflowListExtension = "collection-protocols/"
         self.cpWorkflowExtension = "collection-protocols/_/workflows"
