@@ -993,40 +993,25 @@ class Integration(Settings):
     #  NOTE Generic/GUI uploads and related functions start here
     #  ---------------------------------------------------------------------
 
-    def cpDefJSONUpload(self):
+    def cpDefJSONUpload(self, filePath, env):
         """Creates new CP by uploading CP Def JSON"""
 
-        inputItems = [
-            (self.inputDir + item) for item in os.listdir(self.inputDir) if item.split("_")[0].lower() == "cpdef"
-        ]
+        if not filePath.endswith(".json"):
+            raise TypeError("Input files must be of type .JSON")
 
-        for item in inputItems:
+        token = self.authTokens[env]
+        headers = {"X-OS-API-TOKEN": token}
+        base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
+        extension = self.cpDefExtension
+        url = f"{base}{extension}"
 
-            if not item.endswith(".json"):
-                raise TypeError("Input files must be of type .JSON")
-
-            if item.split("_")[1].lower() in self.envs.keys():
-                env = item.split("_")[1].lower()
-
-            else:
-                raise KeyError(
-                    "Upload file names must be in the following format: [Category]_[Environment Key]_[Additional Misc. Content].JSON"
-                )
-
-            token = self.authTokens[env]
-            headers = {"X-OS-API-TOKEN": token}
-            base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
-            extension = self.cpDefExtension
-            url = f"{base}{extension}"
-
-            files = [("file", (".json", open(item, "rb"), "application/octet-stream"))]
+        with open(filePath, "rb") as f:
+            files = [("file", (".json", f, "application/octet-stream"))]
 
             with httpx.Client(headers=headers, timeout=20) as client:
                 reply = client.post(url, files=files)
 
-            print(reply.text)
-
-            shutil.move(item, self.outputDir)
+        print(reply.text)
 
     #  ---------------------------------------------------------------------
 
@@ -1087,10 +1072,12 @@ class Integration(Settings):
         visit = data["Visit ID"]
 
         url = f"{base}{self.uploadPathReportExtension.replace('_',visit)}"
-        files = {"file": open(file, "rb")}
 
-        with httpx.Client(headers=headers, timeout=20) as client:
-            reply = client.post(url, files=files)
+        with open(file, "rb") as f:
+            files = {"file": f}
+
+            with httpx.Client(headers=headers, timeout=20) as client:
+                reply = client.post(url, files=files)
 
         return reply.text
 
@@ -1164,58 +1151,38 @@ class Integration(Settings):
                 return response
 
     #  ---------------------------------------------------------------------
-
-    def genericGUIFileUpload(self, importType="CREATE", checkStatus=False):
+    #  requires file name be formatted as templateType_env_importType_[misc. info] where importType is create or update
+    def genericGUIFileUpload(self, checkStatus=False):
         """Enables standard bulk uploads as per the OpS GUI; Allows for distinction between Create and Update per the GUI"""
 
-        uploadTypes = [
-            "cp",
-            "specimen",
-            "cpr",
-            "user",
-            "userroles",
-            "site",
-            "shipment",
-            "institute",
-            "dprequirement",
-            "distributionprotocol",
-            "distributionorder",
-            "storagecontainer",
-            "storagecontainertype",
-            "containershipment",
-            "cpe",
-            "masterspecimen",
-            "participant",
-            "sr",
-            "visit",
-            "specimenaliquot",
-            "specimenderivative",
-            "specimendisposal",
-            "consent",
-        ]
-
-        # below creates dict of dicts as follows {uploadType: {filePath: env, filePath: env}}
+        # below creates dict of dicts as follows {templateType: {filePath: (env, importType), filePath: (env, importType)}}
 
         validatedItems = {
-            uploadType: {
-                (self.inputDir + file): file.split("_")[1].lower()
+            templateType: {
+                (self.inputDir + file): (file.split("_")[1].lower(), file.split("_")[2].upper())
                 for file in os.listdir(self.inputDir)
-                if file.lower().startswith(uploadType) and file.split("_")[1].lower() in self.envs.keys()
+                if file.lower().startswith(templateType) and file.split("_")[1].lower() in self.envs.keys()
             }
-            for uploadType in uploadTypes
+            for templateType in self.templateTypes.keys()
         }
 
         for templateType in validatedItems.keys():
 
             if validatedItems[templateType]:
                 [
-                    self.pushFile(self.fileUploadPrep(file), templateType, env, importType, checkStatus)
-                    for file, env in tqdm(
+                    (
+                        self.pushFile(self.fileUploadPrep(file), templateType, env, importType, checkStatus)
+                        if file.lower().endswith(".csv")
+                        else self.pushFile(file, templateType, env, importType, checkStatus)
+                    )
+                    for file, (env, importType) in tqdm(
                         validatedItems[templateType].items(),
                         desc=f"File Uploads - {templateType.title()}",
                         unit=" Files",
                     )
                 ]
+
+            [shutil.move(file, self.outputDir) for file in validatedItems[templateType].keys()]
 
     #  ---------------------------------------------------------------------
 
@@ -1267,10 +1234,12 @@ class Integration(Settings):
         headers = {"X-OS-API-TOKEN": token}
         base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
         url = f"{base}{self.uploadExtension}input-file"
-        files = [("file", (".csv", open(file, "rb"), "application/octet-stream"))]
 
-        with httpx.Client(headers=headers, timeout=20) as client:
-            reply = client.post(url, files=files)
+        with open(file, "rb") as f:
+            files = [("file", (".csv", f, "application/octet-stream"))]
+
+            with httpx.Client(headers=headers, timeout=20) as client:
+                reply = client.post(url, files=files)
 
         fileID = ", ".join([reply.json()[0]["code"], reply.json()[0]["message"]]) if reply.is_error else reply.json()
         fileID = fileID["fileId"]
@@ -1344,15 +1313,10 @@ class Integration(Settings):
     #  NOTE Custom uploads and related functions start here
     #  ---------------------------------------------------------------------
 
-    def upload(self, matchPPID=False):  #  impliment check for cpDefJSONUpload and genericGUIFileUpload
+    def upload(self, matchPPID=False):
         """Generic upload function which attempts to upload as many files in the input folder as possible"""
 
-        # self.syncAll()
-
-        # print("Syncing Dropdown Values")
-        # self.syncDropdowns()
-
-        uploadTypes = ["universal", "participants", "visits", "specimens", "arrays"]
+        uploadTypes = ["universal", "participants", "visits", "specimens", "arrays", "cpdef"]
 
         # below creates dict of dicts as follows {uploadType: {filePath: env, filePath: env}}
 
@@ -1404,6 +1368,15 @@ class Integration(Settings):
                 for file, env in tqdm(validatedItems["arrays"].items(), desc="Array Uploads", unit=" Files")
             ]
             [shutil.move(file, self.outputDir) for file in validatedItems["arrays"].keys()]
+
+        if validatedItems["cpdef"]:
+            [
+                self.cpDefJSONUpload(file, env)
+                for file, env in tqdm(validatedItems["cpdef"].items(), desc="CP Def Uploads", unit=" Files")
+            ]
+            [shutil.move(file, self.outputDir) for file in validatedItems["cpdef"].keys()]
+
+        self.genericGUIFileUpload(checkStatus=True)
 
     #  ---------------------------------------------------------------------
 
