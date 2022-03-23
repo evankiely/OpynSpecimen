@@ -476,23 +476,24 @@ This library is designed to help overcome various points of friction discovered 
 ## Future Directions
 
 ### In No Particular Order Unless Otherwise Noted
-- Impliment checking of limitless column order and match the template order to what is in OpS (highest priority)
+- Impliment checking of limitless column order and match the template order to what is in OpS (**highest priority**)
   - If `Race#1` for participant A in OpS is "Asian", but `Race#1` for participant A in the upload template is "Black or African American," OpS will not create a new entry under Race (i.e. `Race#2`: "Black or African American"). It will, instead, overwrite the content of `Race#1` in OpS with the content of `Race#1` in the upload. This is true in all "limitless" fields (MRN, Ethnicity, Clinical Diagnosis, etc.), and has been a source of a lot of data integrity issues when updating records in bulk, as well as causing false positives when auditing
-- User reported bugs/bug fixes (high priority)
+- User reported bugs/bug fixes (**high priority**)
 - Integration with APIs of other systems (such as PPMS)
 - Ability for OpS to trigger code as an [External Job](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/1491435565/External+jobs)
   - Enables more complex queries, data analysis/reporting, dashboards/visualizations, and highly customized emails for PIs and stakeholders
 - Compatibility check with Python 3.10 and greater
   - Addition of more robust typing/type hinting
   - Addition of more, and more helpful, comments in code
-- Development of (unit & integration) test suite for more test-driven development
+- CI/CD
+  - Development of (unit & integration) test suite for more test-driven development
+  - Further revision and improvement of documentation (auto-documentation from doc-strings and type-hints, etc.)
 - Remove Print statements and replace with more helpful progress messages (ideally via/in addition to tqdm)
-- Further revision and improvement of documentation
 - More robust record validation (automatically catching cases where records are obviously fake/entered as tests)
 - Ability for user to specify audit to run immediately after upload (i.e. verify data was uploaded to OpS as expected)
-- Add token renewal once server response time drops below n seconds (some potentially promising results indicating that this approach might make asynchronous requests feasible)
-- Refactor of Translator class (low priority)
-- Direct SQL interface with OpS backend (lowest priority)
+- Add token renewal once server response time exceeds n seconds (some potentially promising results indicating that this approach might make asynchronous requests feasible, perhaps by forcing a new thread to spin up and offloading subsequent requests there)
+- Refactor of Translator class (**low priority**)
+- Direct SQL interface with OpS backend (**lowest priority**)
 
 ## License
 This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/evankiely/OpynSpecimen/blob/main/LICENSE). For more permissive licensing in the case of commercial usage, please contact the [Office of Technology Transfer](http://www.ott.emory.edu/) at Emory University, and reference TechID 21074
