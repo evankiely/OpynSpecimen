@@ -238,8 +238,10 @@ This library is designed to help overcome various points of friction discovered 
   - **AQL**: For more information on how to write/structure AQL see [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/110264471/How%2Bto%2Bdesign%2Band%2Brun%2Bqueries%2Bprogrammatically%2Busing%2BAQL) and [here](https://openspecimen.atlassian.net/wiki/spaces/CAT/pages/72024115/Calculated%2Bfields%2BTemporal%2BQueries). It is also possible to inspect the AQL of queries defined in the GUI by watching the network calls, which allows you to avoid, mostly, learning the AQL syntax
   - **wantWideRows**: Rather than one row per case of a value, add as many columns as necessary to capture all cases (i.e. instead of one row per MRN Site + MRN Value, one row with multiple columns)
   - **asDF**: Whether the results are returned as a Pandas DataFrame object or as a Dict which replicates the structure of the returned JSON
-- `Integration.cpDefJSONUpload()`
+- `Integration.cpDefJSONUpload(filePath, env)`
   - Creates a new collection protocol by uploading the CP Def JSON (*NOT* Workflow JSON)
+  - **filePath**: Path to the cpDef JSON to be uploaded
+  - **env**: The environment the request is intended for
 - `Integration.pathReportUpload(env)`
   - Uploads all surgical pathology reports located in the pathReports folder. Expects that the file name is the surgical accession number (AKA "Path. Number")
   - **env**: The environment the request is intended for
@@ -263,7 +265,7 @@ This library is designed to help overcome various points of friction discovered 
   - **data**: A dataframe object with headers "Response" and "Updated Sites"
   - **add**: Site(s) to add
 - `Integration.genericGUIFileUpload(importType="CREATE", checkStatus=False)`
-  - A generic function used to upload files via the API rather than the GUI. Behaves exactly the same as if you were doing a bulk upload of data via the OpenSpecimen templates and GUI
+  - A generic function used to upload files via the API rather than the GUI. Behaves exactly the same as if you were doing a bulk upload of data via the OpenSpecimen templates and GUI. Requires file name be formatted as templateType_env_importType_[misc. info], where templateType refers to a value present in `Settings.templateTypes` (see comments in `Settings` for more) and importType is create or update. Files following this format will be uploaded by calling this function directly, or when `Integration.upload()` is called.
   - **importType**: Whether the data is intended to `"CREATE"` new records, or `"UPDATE"` old ones
   - **checkStatus**: Whether or not to check in on the status of an upload every few seconds and print that information to the console
 - `Integration.fileUploadPrep(file)`
