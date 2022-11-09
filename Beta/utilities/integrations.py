@@ -15,9 +15,8 @@ from tqdm import tqdm
 from datetime import datetime
 from settings import Settings
 
-# from concurrent.futures import ThreadPoolExecutor  #  enable if/when OpS can handle async requests without crashing -- remember to uncomment the requisite code below as well
-
-# TODO: Look for places where apply is used to enact things that are simple string methods, and replace with .str.[method]
+#  can be enabled for uploads if/when OpS can handle async requests without crashing -- uncomment the requisite code below
+from concurrent.futures import ThreadPoolExecutor
 
 
 class Integration(Settings):
@@ -25,7 +24,6 @@ class Integration(Settings):
 
         super().__init__()
         self.currentEnv = None
-        self.isUniversal = False
         self.authTokens = self.getTokens()
 
     #  ---------------------------------------------------------------------
@@ -206,12 +204,17 @@ class Integration(Settings):
     #  ---------------------------------------------------------------------
 
     def syncDropdowns(self):
-        """Creates a csv of all dropdowns and their permissible values for each env given in Settings"""
+        """Creates a csv of all dropdowns, their permissible values, and the internal reference ID of those values for each env given in Settings"""
 
         for env in self.envs.keys():
 
             (ddList, maxCount) = self.getDropdownsAsList(env)
-            dataDict = {dropdown: self.getDropdownVals(env, dropdown) for dropdown in ddList}
+
+            dataDict = {}
+            for dropdown in ddList:
+                ddVals = self.getDropdownVals(env, dropdown)
+                dataDict[dropdown] = ddVals[0]
+                dataDict[f"{dropdown}_ids"] = ddVals[1]
 
             for key, val in dataDict.items():
 
@@ -246,7 +249,8 @@ class Integration(Settings):
         initialDict = self.genericGetRequest(
             env, self.pvExtensionDetails["pvExtension"], self.pvExtensionDetails["params"]
         )
-        valList = [val["value"] for val in initialDict]
+
+        valList = [[val["value"] for val in initialDict], [val["id"] for val in initialDict]]
         return valList
 
     #  ---------------------------------------------------------------------
@@ -507,6 +511,7 @@ class Integration(Settings):
 
             self.currentEnv = env
 
+            #  TODO could/should replace this with .apply and use filt formDF[env].notna()
             for formName, val in zip(formDF["formName"], formDF[env]):
 
                 #  needed because nan in pandas is a float, so it's not sufficient to just convert to int -- throws error when trying to convert float nan
@@ -520,6 +525,7 @@ class Integration(Settings):
                         formDF.drop(formDF.loc[filt, env].index, inplace=True)
 
                     else:
+
                         fieldList = fieldList["rows"]
                         #  nested list comprehension pulls rows from fieldList, then the items for that row, and unifies all into a single list
                         #  can be understood as: for row in fieldList, for item in row, item
@@ -990,6 +996,154 @@ class Integration(Settings):
         return reply
 
     #  ---------------------------------------------------------------------
+    #  NOTE Generic/GUI exports and related functions start here
+    #  ---------------------------------------------------------------------
+
+    def pullAllCPDataInTemplates(self):
+        """Pulls down all exports possible for the specified CPs, and keeps only those which contain data; Creates new folders the extracted data in output -> exported -> env -> CP Short Title"""
+
+        # below creates dict of dicts as follows {filePath: env, filePath: env}
+
+        targetCPs = {
+            (self.inputDir + file): file.split("_")[1].lower()
+            for file in os.listdir(self.inputDir)
+            if file.lower().startswith("pull") and file.split("_")[1].lower() in self.envs.keys()
+        }
+
+        cpDF = self.setCPDF()
+
+        #  ideally only one file per env -- should mean only one loop per env below
+
+        for path, env in targetCPs.items():
+            pullDF = pd.read_csv(path, dtype=str)
+
+            filt = cpDF[env].notna() & cpDF["cpShortTitle"].isin(pullDF["CP Short Title"])
+            currentDF = cpDF[filt].copy()
+
+            currentDF[env] = currentDF[env].astype(str).map((lambda x: x.split(".")[0]))
+            currentDF["Response"] = currentDF[env].map(
+                (lambda x: self.genericGetRequest(env, f"{self.cpPullTemplatesExtension.replace('_', x)}"))
+            )
+
+            currentDF.apply((lambda x: self.generateRequests(x, env)), axis=1)
+
+    #  ---------------------------------------------------------------------
+
+    def generateRequests(self, row, env):
+        """Generates the requests required to pull down all possible data from specified CPs in the template format"""
+
+        path = f"{self.dataExportDir}{env}/{row['cpShortTitle']}"
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        cp = row[env]
+        requests = [
+            {
+                "objectType": "extensions",
+                "params": {
+                    "entityType": val["entityType"],
+                    "formName": val["name"],
+                    "cpId": cp,
+                },
+            }
+            for val in row["Response"]
+            if val["name"] != "SpecimenChildrenEvent"
+        ]
+        #  excluding SpecimenChildrenEvent above prevents download of processingEvents, since those are already latent in the parent-child relationship of specimens
+
+        generalObjects = [{"objectType": obj, "params": {"cpId": cp}} for obj in ["cpr", "visit", "specimen"]]
+        requests += generalObjects
+
+        exportRecords = self.triggerExport(requests, env)
+        self.downloadExportedData(exportRecords, env, path)
+
+        allPaths = [f"{path}/{file}" for file in os.listdir(path)]
+
+        with ThreadPoolExecutor() as ex:
+            ex.map(self.removeEmptyExports, allPaths)
+
+    #  ---------------------------------------------------------------------
+
+    def triggerExport(self, requests, env):
+        """Triggers the export of data from a particular CP, given the requests generated by generateRequest"""
+
+        async def exportLogic(requests, env):
+            token = self.authTokens[env]
+            headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
+            base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
+            url = f"{base}{self.exportExtension}"
+
+            async with httpx.AsyncClient(headers=headers, timeout=20) as client:
+
+                tasks = [
+                    client.post(
+                        url,
+                        data=jp.encode(request, unpicklable=False),
+                    )
+                    for request in requests
+                ]
+                replies = await asyncio.gather(*tasks)
+
+            # this is in a specific order, so be careful when altering -- you might end up with mislabeled exports
+            genericExports = ["Specimens", "Visits", "Participants"]
+
+            results = [
+                (
+                    [reply.json()[0]["code"], reply.json()[0]["message"]]
+                    if reply.is_error
+                    else [str(reply.json()["id"]), genericExports.pop()]
+                    if reply.json()["params"].get("formName") is None
+                    else [str(reply.json()["id"]), reply.json()["params"]["formName"]]
+                )
+                for reply in replies
+            ]
+
+            return results
+
+        return asyncio.run(exportLogic(requests, env))
+
+    #  ---------------------------------------------------------------------
+
+    def downloadExportedData(self, exportRecords, env, path):
+        """Pulls down the files generated by triggerExport and saves them"""
+
+        async def downloadLogic(exportRecords, env, path):
+            token = self.authTokens[env]
+            headers = {"X-OS-API-TOKEN": token, "Content-Type": "application/json"}
+            base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
+            url = f"{base}{self.downloadExtension}"
+
+            async with httpx.AsyncClient(headers=headers, timeout=20) as client:
+
+                tasks = [client.get(url.replace("_", export[0])) for export in exportRecords]
+                replies = await asyncio.gather(*tasks)
+
+            results = [
+                ([reply.json()[0]["code"], reply.json()[0]["message"]] if reply.is_error else reply.content)
+                for reply in replies
+            ]
+
+            for result, export in zip(results, exportRecords):
+                filePath = f"{path}/{export[1]}.zip"
+                with open(filePath, "wb") as f:
+                    f.write(result)
+
+                shutil.unpack_archive(filePath, path)
+                os.remove(filePath)
+                os.rename(f"{path}/output.csv", f"{path}/{export[1]}.csv")
+
+        return asyncio.run(downloadLogic(exportRecords, env, path))
+
+    #  ---------------------------------------------------------------------
+
+    def removeEmptyExports(self, path):
+        """Opens downloaded templates and deletes the file if empty"""
+        df = pd.read_csv(path, dtype=str)
+        if df.empty:
+            os.remove(path)
+
+    #  ---------------------------------------------------------------------
     #  NOTE Generic/GUI uploads and related functions start here
     #  ---------------------------------------------------------------------
 
@@ -1153,7 +1307,7 @@ class Integration(Settings):
     #  ---------------------------------------------------------------------
     #  requires file name be formatted as templateType_env_importType_[misc. info] where importType is create or update
     def genericGUIFileUpload(self, checkStatus=False):
-        """Enables standard bulk uploads as per the OpS GUI; Allows for distinction between Create and Update per the GUI"""
+        """Enables standard bulk uploads as per the OpS GUI; Allows for distinction between Create and Update per the GUI; Only handles templates included in settings.templateTypes"""
 
         # below creates dict of dicts as follows {templateType: {filePath: (env, importType), filePath: (env, importType)}}
 
