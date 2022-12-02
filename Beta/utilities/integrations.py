@@ -1056,6 +1056,9 @@ class Integration(Settings):
         requests += generalObjects
 
         exportRecords = self.triggerExport(requests, env)
+        #  added the below to prevent attempted download of files still being generated -- ideally replace this with something which waits dynamically only when it can be confirmed
+        #  that a given file is still pending, and try again to download (only) those files which were still pending after n seconds
+        time.sleep(300)
         self.downloadExportedData(exportRecords, env, path)
 
         allPaths = [f"{path}/{file}" for file in os.listdir(path)]
@@ -1074,7 +1077,7 @@ class Integration(Settings):
             base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
             url = f"{base}{self.exportExtension}"
 
-            async with httpx.AsyncClient(headers=headers, timeout=20) as client:
+            async with httpx.AsyncClient(headers=headers, timeout=200) as client:
 
                 tasks = [
                     client.post(
@@ -1114,7 +1117,7 @@ class Integration(Settings):
             base = self.baseURL.replace("_", "") if env == "prod" else self.baseURL.replace("_", env)
             url = f"{base}{self.downloadExtension}"
 
-            async with httpx.AsyncClient(headers=headers, timeout=20) as client:
+            async with httpx.AsyncClient(headers=headers, timeout=200) as client:
 
                 tasks = [client.get(url.replace("_", export[0])) for export in exportRecords]
                 replies = await asyncio.gather(*tasks)
@@ -1125,6 +1128,11 @@ class Integration(Settings):
             ]
 
             for result, export in zip(results, exportRecords):
+
+                if isinstance(result, list):
+                    print(f"File not ready for download! Errored as follows:\n\n{result}")
+                    continue
+
                 filePath = f"{path}/{export[1]}.zip"
                 with open(filePath, "wb") as f:
                     f.write(result)
