@@ -6,7 +6,9 @@
 ## Introduction
 This library is designed to help overcome various points of friction discovered while using [OpenSpecimen](https://github.com/krishagni/openspecimen).
 
-**Note**: The Beta version is the most recent and up to date revision. All Alpha code in this repository should be considered deprecated.
+**Note 1**: The Beta version is the most recent and up to date revision. All Alpha code in this repository should be considered deprecated.
+
+**Note 2**: As of 12/02/2022 I am not longer working with OpenSpecimen, so this repository is not likely to be updated in the near term. However, I remain interested in aiding those folks tasked with using this system. Feel free to give this code a shot, fork the repo, etc., and I will do my best to reply to any questions/comments/concerns in a reasonable period of time.
 
 ## Getting Started
 
